@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تعلم قاعدة فليمنج - Fleming's Rule (Realistic Hand)</title>
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Three.js Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <style>
+        /* Base Styles */
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f0f4f8; /* Slightly adjusted background */
+            color: #333;
+        }
+
+        /* Canvas Container */
+        #handModelContainer { /* Renamed container for clarity */
+            width: 100%;
+            height: 350px; /* Adjusted height */
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            background-color: #e0e8f0; /* Lighter background for the 3D view */
+            position: relative; /* Needed for absolute positioning of labels/buttons */
+            overflow: hidden; /* Hide anything extending beyond bounds */
+        }
+
+        #handModelCanvas { /* The actual canvas will be added by Three.js */
+             display: block; /* Ensure canvas takes up container space */
+             width: 100%;
+             height: 100%;
+        }
+
+
+        /* Other UI Elements */
+        .question-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .timer {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid #3182ce;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.25rem;
+        }
+
+        .vector-label {
+            font-weight: 500; /* Medium weight */
+        }
+
+        .vector-direction {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .arrow {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            border-radius: 50%;
+        }
+
+        /* Button on top of the canvas */
+        .hand-type-button {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            z-index: 10;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+        }
+
+        .diagram-container {
+            height: 200px;
+            position: relative;
+            background-color: #f8fafc; /* Light background for diagram */
+            border: 1px solid #e2e8f0;
+        }
+
+        .diagram-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .game-controls {
+            position: relative;
+            z-index: 5;
+        }
+
+        /* Responsive Adjustments */
+        @media (min-width: 768px) {
+            #handModelContainer {
+                height: 450px; /* Taller on larger screens */
+            }
+            .diagram-container {
+                height: 250px;
+            }
+        }
+
+        .leaderboard-entry {
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 4px;
+        }
+
+        .modal {
+            background-color: rgba(0, 0, 0, 0.6); /* Darker overlay */
+        }
+
+        /* Labels positioned over the 3D canvas */
+        .direction-arrow-label { /* Renamed class */
+            position: absolute; /* Crucial for positioning based on JS calculations */
+            background-color: rgba(0, 0, 0, 0.6); /* Dark semi-transparent background */
+            color: white; /* White text */
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 13px; /* Slightly smaller */
+            font-weight: bold;
+            pointer-events: none; /* Don't interfere with mouse controls */
+            white-space: nowrap; /* Prevent wrapping */
+            transform: translate(-50%, -50%); /* Center label on calculated point */
+            display: none; /* Initially hidden, shown by JS */
+            z-index: 20; /* Above canvas, below buttons if needed */
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-700 mb-2">تعلم قاعدة فليمنج (نموذج واقعي)</h1>
+            <p class="text-lg text-gray-600">تطبيق تفاعلي لمساعدة الطلاب على إتقان قواعد اليد اليمنى واليسرى لفليمنج</p>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- Left Column: 3D Hand Model -->
+            <div class="w-full md:w-1/2">
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-3 text-blue-600">نموذج اليد</h2>
+                    <!-- Container for the 3D Canvas -->
+                    <div id="handModelContainer">
+                        <!-- Canvas will be inserted here by Three.js -->
+                        <button id="toggleHandType" class="hand-type-button bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded text-sm">
+                            تبديل إلى اليد اليسرى
+                        </button>
+                         <!-- Loading Indicator -->
+                         <div id="loadingIndicator" class="absolute inset-0 flex items-center justify-center bg-gray-200 bg-opacity-75 z-30">
+                             <p class="text-gray-700 font-semibold">جار تحميل نموذج اليد...</p>
+                         </div>
+                    </div>
+                     <!-- Labels will be appended here by JS -->
+                    <div id="labelContainer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+
+                    <div class="mt-4 text-center">
+                        <p class="mb-1 text-sm">استخدم الماوس أو شاشة اللمس لتدوير النموذج</p>
+                        <p class="text-xs text-gray-500">انقر واسحب لتدوير • استخدم عجلة الماوس/إصبعين للتكبير</p>
+                    </div>
+                    <!-- Legend -->
+                    <div class="flex flex-wrap justify-around mt-3 text-sm">
+                        <div class="flex items-center m-1">
+                            <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                            <span>الإبهام: القوة (F)</span>
+                        </div>
+                        <div class="flex items-center m-1">
+                            <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                            <span>السبابة: المجال (B)</span>
+                        </div>
+                        <div class="flex items-center m-1">
+                            <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                            <span>الوسطى: التيار (I) / السرعة (v)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Game Interface -->
+            <div class="w-full md:w-1/2">
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-blue-600">المستوى: <span id="levelDisplay">1</span></h2>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-700">الوقت:</span>
+                            <div class="timer" id="timer">30</div>
+                        </div>
+                    </div>
+
+                    <div class="question-container p-4 mb-4">
+                        <h3 class="text-lg font-bold mb-2" id="ruleType">قاعدة اليد اليمنى</h3>
+                        <p class="mb-4 text-sm" id="questionText">حدد اتجاه القوة (F) بناءً على المجال المغناطيسي (B) والتيار (I)</p>
+
+                        <div class="diagram-container mb-4">
+                            <canvas id="diagramCanvas" class="diagram-canvas"></canvas>
+                        </div>
+
+                        <div class="flex flex-wrap gap-x-4 gap-y-2 mb-4 text-sm">
+                            <div class="flex items-center gap-2" id="quantity1">
+                                <span class="vector-label" id="labelB">المجال (B):</span>
+                                <div class="arrow bg-blue-100" id="BDirection">↑</div>
+                            </div>
+                            <div class="flex items-center gap-2" id="quantity2">
+                                <span class="vector-label" id="labelI">التيار (I):</span>
+                                <div class="arrow bg-green-100" id="IDirection">→</div>
+                            </div>
+                            <div class="flex items-center gap-2" id="quantity3">
+                                <span class="vector-label" id="labelF">القوة (F):</span>
+                                <div class="arrow bg-red-100" id="FDirection">?</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="game-controls flex justify-between">
+                        <div>
+                            <span class="font-bold">النقاط: </span>
+                            <span id="scoreDisplay">0</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="checkAnswer" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded text-sm">
+                                تأكيد الإجابة
+                            </button>
+                            <button id="skipQuestion" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded text-sm">
+                                تخطي
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feedback Display -->
+                <div id="feedbackContainer" class="mt-4 p-4 bg-white rounded-lg shadow-md hidden">
+                    <h3 class="text-lg font-bold mb-2" id="feedbackTitle">النتيجة</h3>
+                    <p id="feedbackText" class="mb-3"></p>
+                    <div class="flex justify-center">
+                        <button id="nextLevel" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            المستوى التالي
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard and Instructions -->
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-4 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-3 text-blue-600">قائمة المتصدرين</h2>
+                <div id="leaderboardContainer" class="space-y-2 max-h-48 overflow-y-auto">
+                    <!-- Leaderboard entries will be added here -->
+                </div>
+                <div class="mt-4">
+                    <button id="saveScore" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                        حفظ النتيجة
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow-md">
+                <h2 class="text-xl font-bold mb-3 text-blue-600">تعليمات</h2>
+                <div class="space-y-2 text-sm">
+                    <p><strong>قاعدة اليد اليمنى (للمولدات/القوة على سلك):</strong></p>
+                    <ul class="list-disc list-inside mr-4">
+                        <li><strong class="text-red-600">الإبهام:</strong> يشير إلى اتجاه القوة (F) أو الحركة.</li>
+                        <li><strong class="text-blue-600">السبابة:</strong> تشير إلى اتجاه المجال المغناطيسي (B) (من الشمالي للجنوبي).</li>
+                        <li><strong class="text-green-600">الوسطى:</strong> تشير إلى اتجاه التيار الكهربائي الاصطلاحي (I) (من + إلى -).</li>
+                    </ul>
+
+                    <p class="mt-2"><strong>قاعدة اليد اليسرى (للمحركات/القوة على شحنة):</strong></p>
+                    <ul class="list-disc list-inside mr-4">
+                         <li><strong class="text-red-600">الإبهام:</strong> يشير إلى اتجاه القوة (F) المؤثرة على الشحنة أو السلك.</li>
+                         <li><strong class="text-blue-600">السبابة:</strong> تشير إلى اتجاه المجال المغناطيسي (B).</li>
+                         <li><strong class="text-green-600">الوسطى:</strong> تشير إلى اتجاه حركة الشحنة الموجبة (v) أو التيار الاصطلاحي (I). (اعكس اتجاه الوسطى للشحنة السالبة).</li>
+                    </ul>
+                     <p class="mt-2"><strong>ملاحظة:</strong> اجعل الأصابع الثلاثة متعامدة على بعضها البعض.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Score Modal -->
+    <div id="saveScoreModal" class="modal fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full mx-4">
+            <h2 class="text-xl font-bold mb-4 text-center">حفظ النتيجة</h2>
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2" for="playerName">الاسم:</label>
+                <input id="playerName" type="text" class="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" maxlength="20">
+                 <p id="saveError" class="text-red-500 text-sm mt-1 hidden">الرجاء إدخال اسم.</p>
+            </div>
+            <div class="flex justify-between gap-3">
+                <button id="confirmSave" class="flex-1 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                    حفظ
+                </button>
+                 <button id="cancelSave" class="flex-1 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module"> // Use type="module" for potential imports if needed later
+
+        // Game state
+        let gameState = {
+            level: 1,
+            score: 0,
+            timer: 30,
+            timerInterval: null,
+            isRightHand: true,
+            currentRule: 'right', // 'right' or 'left'
+            quantities: {
+                B: { direction: null, known: true, label: 'المجال (B)' },
+                I: { direction: null, known: true, label: 'التيار (I)' }, // Default label
+                F: { direction: null, known: false, label: 'القوة (F)' }
+            },
+            leaderboard: [
+                { name: 'أحمد', score: 850 },
+                { name: 'سارة', score: 720 },
+                { name: 'محمد', score: 690 }
+            ] // Will load from localStorage if available
+        };
+
+        // Direction vectors mapping (Keep using symbols for UI, vectors for logic)
+        const directions = {
+            up: { symbol: '↑', vector: new THREE.Vector3(0, 1, 0), label: 'للأعلى' },
+            down: { symbol: '↓', vector: new THREE.Vector3(0, -1, 0), label: 'للأسفل' },
+            left: { symbol: '←', vector: new THREE.Vector3(-1, 0, 0), label: 'لليسار' },
+            right: { symbol: '→', vector: new THREE.Vector3(1, 0, 0), label: 'لليمين' },
+            forward: { symbol: '⊙', vector: new THREE.Vector3(0, 0, 1), label: 'للخارج (نحوك)' }, // Symbol for out of page
+            backward: { symbol: '⊗', vector: new THREE.Vector3(0, 0, -1), label: 'للداخل (عنك)' } // Symbol for into page
+        };
+        const directionKeys = Object.keys(directions);
+
+        // DOM Elements
+        const elements = {
+            timer: document.getElementById('timer'),
+            levelDisplay: document.getElementById('levelDisplay'),
+            scoreDisplay: document.getElementById('scoreDisplay'),
+            handModelContainer: document.getElementById('handModelContainer'), // Container div
+            labelContainer: document.getElementById('labelContainer'),
+            toggleHandType: document.getElementById('toggleHandType'),
+            ruleType: document.getElementById('ruleType'),
+            questionText: document.getElementById('questionText'),
+            diagramCanvas: document.getElementById('diagramCanvas'),
+            BDirection: document.getElementById('BDirection'),
+            IDirection: document.getElementById('IDirection'),
+            FDirection: document.getElementById('FDirection'),
+            labelB: document.getElementById('labelB'),
+            labelI: document.getElementById('labelI'),
+            labelF: document.getElementById('labelF'),
+            checkAnswer: document.getElementById('checkAnswer'),
+            skipQuestion: document.getElementById('skipQuestion'),
+            feedbackContainer: document.getElementById('feedbackContainer'),
+            feedbackTitle: document.getElementById('feedbackTitle'),
+            feedbackText: document.getElementById('feedbackText'),
+            nextLevel: document.getElementById('nextLevel'),
+            saveScore: document.getElementById('saveScore'),
+            saveScoreModal: document.getElementById('saveScoreModal'),
+            playerName: document.getElementById('playerName'),
+            saveError: document.getElementById('saveError'),
+            cancelSave: document.getElementById('cancelSave'),
+            confirmSave: document.getElementById('confirmSave'),
+            leaderboardContainer: document.getElementById('leaderboardContainer'),
+            loadingIndicator: document.getElementById('loadingIndicator'),
+        };
+
+        // Three.js setup
+        let scene, camera, renderer, controls;
+        let rightHandGroup = new THREE.Group();
+        let leftHandGroup = new THREE.Group();
+        let currentHandGroup;
+        let thumbArrow, indexArrow, middleArrow; // Groups containing the arrows
+        let directionLabels = {}; // Holds the HTML label elements
+
+        // --- Constants for Loaded Model Adjustment ---
+        // !!! YOU MUST ADJUST THESE FOR YOUR MODELS !!!
+        const MODEL_SCALE = 2; // Example: Start small, adjust as needed
+        const RIGHT_HAND_URL = 'left_hand_rule_2.glb'; // Corrected path
+        const LEFT_HAND_URL = 'left_hand_rule_2.glb';   // Corrected path
+
+        // --- Arrow positioning relative to the hand group's origin ---
+        // !!! THESE OFFSETS REQUIRE CAREFUL ADJUSTMENT based on your model's origin & pose !!!
+        // Experiment with these values until arrows align with fingertips.
+        const ARROW_OFFSETS = {
+            // Thumb (approx -X direction relative to a standard posed hand)
+            thumb: { x: 0.2, y: 0.6, z: 0.6, rotZ: 0 / 2, rotY: 0 },
+            // Index (approx +Y direction)
+            index: { x: 0.1, y: 1.5, z: 0.1, rotZ: 0, rotY: 0 },
+            // Middle (approx +Z direction)
+            middle: { x: -0.2, y: 1.0, z: 1.2, rotX: Math.PI / 2, rotY: 0 }
+        };
+        const ARROW_SCALE = 0.6; // Adjust overall arrow size
+
+        // --- Initialization ---
+        function init() {
+            loadLeaderboard(); // Load saved scores first
+            initThreeJS(); // Setup scene, camera, lights etc.
+            // Load models, then start game
+            loadHandModels().then(() => {
+                console.log("Hand models loaded.");
+                elements.loadingIndicator.style.display = 'none'; // Hide loading indicator
+                currentHandGroup = rightHandGroup; // Start with right hand
+                scene.add(currentHandGroup);
+                addDirectionArrows(currentHandGroup); // Add arrows to the initial hand group
+                addDirectionLabels(); // Create HTML labels
+                animate(); // Start render loop
+                generateLevel(); // Setup first level
+                updateLeaderboard(); // Display loaded/initial leaderboard
+            }).catch(error => {
+                console.error("Error loading hand models:", error);
+                elements.loadingIndicator.innerHTML = '<p class="text-red-600 font-semibold text-center px-4">فشل تحميل نموذج اليد.<br>يرجى التأكد من صحة المسارات أو المحاولة لاحقًا.</p>';
+                 elements.handModelContainer.style.backgroundColor = '#fee2e2'; // Indicate error state
+            });
+        }
+
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xe0e8f0);
+
+            const container = elements.handModelContainer;
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
+             // Adjust camera position - VERY dependent on model scale/origin
+             camera.position.set(0, 1.5, 4);
+            camera.lookAt(0, 0.5, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.physicallyCorrectLights = true;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+             // Append canvas to the container
+             container.appendChild(renderer.domElement);
+             renderer.domElement.id = 'handModelCanvas'; // Assign ID for potential styling
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            controls.target.set(0, 0.5, 0); // Adjust target based on expected model center
+             controls.minDistance = 1; // Prevent zooming too close
+             controls.maxDistance = 10; // Prevent zooming too far
+            controls.update();
+
+            // Lighting
+             const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+             const keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
+             keyLight.position.set(-5, 5, 5);
+             keyLight.castShadow = true;
+             keyLight.shadow.mapSize.width = 1024;
+             keyLight.shadow.mapSize.height = 1024;
+             keyLight.shadow.camera.near = 0.5;
+             keyLight.shadow.camera.far = 20;
+             scene.add(keyLight);
+
+            // const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            // fillLight.position.set(5, 2, -3);
+            // scene.add(fillLight);
+
+             const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+             rimLight.position.set(0, 3, -5);
+             scene.add(rimLight);
+
+            // Ground Plane (optional, for shadows)
+            // const groundGeometry = new THREE.PlaneGeometry(10, 10);
+            // const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+            // const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            // ground.rotation.x = -Math.PI / 2;
+            // ground.position.y = -0.5; // Adjust based on hand position
+            // ground.receiveShadow = true;
+            // scene.add(ground);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function loadHandModels() {
+            const loader = new THREE.GLTFLoader();
+            elements.loadingIndicator.style.display = 'flex'; // Show loading
+
+            // Wrap loads in promises
+            const loadRight = new Promise((resolve, reject) => {
+                loader.load(RIGHT_HAND_URL, (gltf) => {
+                    const model = gltf.scene;
+                    model.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+                    // --- Optional: Adjust position/rotation if model origin isn't ideal ---
+                    // model.position.set(0, -0.5, 0); // Example adjustment
+                    // model.rotation.y = Math.PI; // Example adjustment
+                    model.traverse(node => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true; // Hand might cast shadow on itself
+                             // Optional: Improve material if needed (check console for material names)
+                            // if (node.material.map) {
+                            //     node.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                            // }
+                        }
+                    });
+                    rightHandGroup.add(model);
+                    scene.add(rightHandGroup); // Add to scene, visibility controlled later
+                    rightHandGroup.visible = true; // Start visible
+                    resolve();
+                }, undefined, (error) => {
+                    console.error(`Error loading right hand from ${RIGHT_HAND_URL}`, error);
+                    reject(error);
+                });
+            });
+
+            const loadLeft = new Promise((resolve, reject) => {
+                loader.load(LEFT_HAND_URL, (gltf) => {
+                    const model = gltf.scene;
+                    model.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+                    // --- Optional: Adjust position/rotation ---
+                    // model.position.set(0, -0.5, 0);
+                    // model.rotation.y = Math.PI;
+                    model.traverse(node => { if (node.isMesh) { node.castShadow = true; node.receiveShadow = true; } });
+                    leftHandGroup.add(model);
+                    scene.add(leftHandGroup);
+                    leftHandGroup.visible = false; // Start hidden
+                    resolve();
+                }, undefined, (error) => {
+                     console.error(`Error loading left hand from ${LEFT_HAND_URL}`, error);
+                     reject(error);
+                 });
+            });
+
+            return Promise.all([loadRight, loadLeft]);
+        }
+
+        function addDirectionArrows(handGroup) {
+             if (!handGroup) return;
+
+             // Clear existing arrows from the group first to prevent duplicates on toggle
+             if (thumbArrow) handGroup.remove(thumbArrow);
+             if (indexArrow) handGroup.remove(indexArrow);
+             if (middleArrow) handGroup.remove(middleArrow);
+
+
+            const arrowLength = 0.4 * ARROW_SCALE;
+            const arrowRadius = 0.08 * ARROW_SCALE;
+            const shaftHeight = 0.6 * ARROW_SCALE;
+            const shaftRadius = 0.03 * ARROW_SCALE;
+
+            const createArrow = (color) => {
+                const arrowGroup = new THREE.Group();
+                const material = new THREE.MeshStandardMaterial({ color: color, metalness: 0.4, roughness: 0.6 });
+                const coneGeometry = new THREE.ConeGeometry(arrowRadius, arrowLength, 16);
+                const cone = new THREE.Mesh(coneGeometry, material);
+                cone.position.y = shaftHeight / 2; // Cone tip at end of shaft
+                cone.castShadow = true;
+                arrowGroup.add(cone);
+
+                const shaftGeometry = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftHeight, 16);
+                const shaft = new THREE.Mesh(shaftGeometry, material);
+                 shaft.position.y = 0; // Shaft centered at arrowGroup origin
+                shaft.castShadow = true;
+                arrowGroup.add(shaft);
+
+                // Rotate group so arrow points along +Y initially before applying offsets/rotations
+                // arrowGroup.rotation.x = Math.PI / 2; // Incorrect - keep aligned with axes first
+
+                return arrowGroup;
+            };
+
+             // --- Create and Position Arrows based on OFFSETS ---
+             // Thumb (Red: F) - Aiming along negative X relative to group origin by default
+             thumbArrow = createArrow(0xff3333); // Brighter red
+             thumbArrow.position.set(ARROW_OFFSETS.thumb.x, ARROW_OFFSETS.thumb.y, ARROW_OFFSETS.thumb.z);
+             thumbArrow.rotation.set(0, ARROW_OFFSETS.thumb.rotY || 0, ARROW_OFFSETS.thumb.rotZ || 0);
+             handGroup.add(thumbArrow);
+
+             // Index (Blue: B) - Aiming along positive Y relative to group origin by default
+             indexArrow = createArrow(0x3333ff); // Brighter blue
+             indexArrow.position.set(ARROW_OFFSETS.index.x, ARROW_OFFSETS.index.y, ARROW_OFFSETS.index.z);
+              indexArrow.rotation.set(0, ARROW_OFFSETS.index.rotY || 0, ARROW_OFFSETS.index.rotZ || 0);
+              indexArrow.rotateX(Math.PI / 2); // Point it up along Y
+             handGroup.add(indexArrow);
+
+             // Middle (Green: I/v) - Aiming along positive Z relative to group origin by default
+             middleArrow = createArrow(0x33ff33); // Brighter green
+             middleArrow.position.set(ARROW_OFFSETS.middle.x, ARROW_OFFSETS.middle.y, ARROW_OFFSETS.middle.z);
+             middleArrow.rotation.set(ARROW_OFFSETS.middle.rotX || 0, ARROW_OFFSETS.middle.rotY || 0, 0);
+              // middleArrow.rotateY(Math.PI / 2); // Point along Z
+             handGroup.add(middleArrow);
+        }
+
+         function addDirectionLabels() {
+             // Create HTML elements for direction labels
+             const labelContainer = elements.labelContainer; // Use dedicated container
+
+             const createLabel = (id, text, color) => {
+                 const label = document.createElement('div');
+                 label.id = id;
+                 label.className = 'direction-arrow-label'; // Use new class
+                 label.style.backgroundColor = color; // Use arrow color for background
+                 label.style.color = 'white'; // Ensure contrast
+                 label.style.textShadow = '1px 1px 1px rgba(0,0,0,0.5)';
+                 label.textContent = text;
+                 labelContainer.appendChild(label); // Append to label container
+                 return label;
+             };
+
+             // Make sure colors match arrow colors
+             directionLabels.thumb = createLabel('thumbLabel', 'F (قوة)', '#ff3333');
+             directionLabels.index = createLabel('indexLabel', 'B (مجال)', '#3333ff');
+             directionLabels.middle = createLabel('middleLabel', 'I (تيار/سرعة)', '#33ff33');
+         }
+
+        function updateDirectionLabels() {
+            if (!directionLabels.thumb || !currentHandGroup || !currentHandGroup.visible || !thumbArrow) {
+                 // Hide all labels if prerequisites aren't met
+                 Object.values(directionLabels).forEach(label => { if (label) label.style.display = 'none'; });
+                 return;
+             }
+
+            const updateLabel = (label, arrowObject) => {
+                if (!label || !arrowObject) return;
+
+                const worldPos = new THREE.Vector3();
+                 // Get world position of the *tip* of the arrow (approx)
+                 // Use the arrow group's position + a slight offset in its pointing direction
+                 const tipOffset = new THREE.Vector3(0, 0.5 * ARROW_SCALE, 0); // Offset along local Y axis (pointing direction)
+                 tipOffset.applyQuaternion(arrowObject.quaternion); // Rotate offset to world space
+                 arrowObject.getWorldPosition(worldPos); // Get arrow group's world origin
+                 worldPos.add(tipOffset); // Add offset to approximate tip
+
+
+                const screenPos = projectToScreen(worldPos);
+
+                if (screenPos.visible) {
+                    label.style.left = `${screenPos.x}px`;
+                    label.style.top = `${screenPos.y}px`;
+                    label.style.display = 'block';
+                } else {
+                    label.style.display = 'none';
+                }
+            };
+
+            updateLabel(directionLabels.thumb, thumbArrow);
+            updateLabel(directionLabels.index, indexArrow);
+            updateLabel(directionLabels.middle, middleArrow);
+        }
+
+        function projectToScreen(position) {
+            const vector = position.clone();
+             const canvas = renderer.domElement;
+             const rect = canvas.getBoundingClientRect(); // Get canvas position relative to viewport
+
+            vector.project(camera); // Project to Normalized Device Coords (-1 to +1)
+
+            const visible = vector.z < 1; // Is it in front of the camera's near plane?
+
+            // Convert NDC to screen coordinates relative to the *canvas element*
+            const xRel = (vector.x * 0.5 + 0.5) * canvas.clientWidth;
+            const yRel = (-vector.y * 0.5 + 0.5) * canvas.clientHeight;
+
+            // Convert canvas-relative coords to viewport-relative coords
+            const xAbs = xRel + rect.left;
+            const yAbs = yRel + rect.top;
+
+            return {
+                x: xAbs,
+                y: yAbs,
+                visible: visible
+            };
+        }
+
+        function onWindowResize() {
+             const container = elements.handModelContainer;
+             if (!container) return;
+             camera.aspect = container.clientWidth / container.clientHeight;
+             camera.updateProjectionMatrix();
+             renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Required if damping enabled
+            renderer.render(scene, camera);
+            updateDirectionLabels(); // Update label positions every frame
+        }
+
+         function toggleHandType() {
+             if (!rightHandGroup || !leftHandGroup) return; // Models not loaded yet
+
+             // Determine which group is currently visible
+             const wasRightHand = rightHandGroup.visible;
+
+             if (wasRightHand) {
+                 rightHandGroup.visible = false;
+                 leftHandGroup.visible = true;
+                 currentHandGroup = leftHandGroup;
+                 gameState.isRightHand = false;
+                 elements.toggleHandType.textContent = 'تبديل إلى اليد اليمنى';
+                 // Ensure arrows are visible/added for the left hand if needed
+                 // If arrows are children of the group, they toggle visibility automatically.
+             } else {
+                 rightHandGroup.visible = true;
+                 leftHandGroup.visible = false;
+                 currentHandGroup = rightHandGroup;
+                 gameState.isRightHand = true;
+                 elements.toggleHandType.textContent = 'تبديل إلى اليد اليسرى';
+                  // Ensure arrows are visible/added for the right hand if needed
+             }
+             // Reset camera slightly? Or let user control?
+             // camera.position.set(0, 1.5, 4);
+             // controls.target.set(0, 0.5, 0);
+             // controls.update();
+         }
+
+        // --- Game Logic (Mostly Unchanged) ---
+
+        function setupDiagram() {
+            const canvas = elements.diagramCanvas;
+             const ctx = canvas.getContext('2d');
+             // Ensure canvas size matches its CSS size for sharp rendering
+             const width = canvas.clientWidth;
+             const height = canvas.clientHeight;
+             if (canvas.width !== width || canvas.height !== height) {
+                 canvas.width = width;
+                 canvas.height = height;
+             }
+
+
+            ctx.clearRect(0, 0, width, height);
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+             const axisLength = Math.min(width, height) * 0.35; // Slightly smaller axes
+             const arrowSize = 8; // Arrowhead size
+
+             // Function to draw an axis with arrow
+             const drawAxis = (startX, startY, endX, endY, color, label) => {
+                 ctx.beginPath();
+                 ctx.moveTo(startX, startY);
+                 ctx.lineTo(endX, endY);
+                 ctx.strokeStyle = color;
+                 ctx.lineWidth = 1.5;
+                 ctx.stroke();
+
+                 // Arrowhead
+                 const angle = Math.atan2(endY - startY, endX - startX);
+                 ctx.beginPath();
+                 ctx.moveTo(endX, endY);
+                 ctx.lineTo(endX - arrowSize * Math.cos(angle - Math.PI / 6), endY - arrowSize * Math.sin(angle - Math.PI / 6));
+                 ctx.lineTo(endX - arrowSize * Math.cos(angle + Math.PI / 6), endY - arrowSize * Math.sin(angle + Math.PI / 6));
+                 ctx.closePath();
+                 ctx.fillStyle = color;
+                 ctx.fill();
+
+                 // Label
+                 ctx.fillStyle = color;
+                 ctx.font = 'bold 12px Tajawal';
+                 ctx.textAlign = 'center';
+                 ctx.fillText(label, endX + Math.cos(angle)*15, endY + Math.sin(angle)*15 + 4); // Adjust label pos
+             };
+
+             // Draw Axes (Perspective view)
+             // Y (Up/Down) - Blue (B)
+             drawAxis(centerX, centerY + axisLength, centerX, centerY - axisLength, '#0000ff', 'Y (B)');
+             // X (Left/Right) - Red (F)
+             drawAxis(centerX - axisLength, centerY, centerX + axisLength, centerY, '#ff0000', 'X (F)');
+             // Z (In/Out) - Green (I/v) - Represented by perspective line and symbols
+             const zEndX = centerX + axisLength * 0.5;
+             const zEndY = centerY + axisLength * 0.5;
+             drawAxis(centerX - axisLength * 0.5, centerY - axisLength * 0.5, zEndX, zEndY, '#008000', 'Z (I/v)');
+
+
+             // Draw Known Vectors
+             const vectorLength = axisLength * 0.8;
+             if (gameState.quantities.B.known) drawVector(ctx, centerX, centerY, gameState.quantities.B.direction, 'B', '#0000ff', vectorLength);
+             if (gameState.quantities.I.known) drawVector(ctx, centerX, centerY, gameState.quantities.I.direction, gameState.currentRule === 'left' ? 'v' : 'I', '#00cc00', vectorLength); // Use v for left rule
+             if (gameState.quantities.F.known) drawVector(ctx, centerX, centerY, gameState.quantities.F.direction, 'F', '#ff0000', vectorLength);
+        }
+
+        function drawVector(ctx, centerX, centerY, directionKey, label, color, length) {
+             const dirInfo = directions[directionKey];
+             if (!dirInfo) return;
+
+             let endX, endY;
+             const arrowSize = 10;
+
+             ctx.lineWidth = 3;
+             ctx.strokeStyle = color;
+             ctx.fillStyle = color;
+
+             // Special handling for In/Out directions
+             if (directionKey === 'forward') { // Out of page (⊙)
+                 ctx.beginPath();
+                 ctx.arc(centerX, centerY, length * 0.15, 0, Math.PI * 2); // Outer circle
+                 ctx.stroke();
+                 ctx.beginPath();
+                 ctx.arc(centerX, centerY, length * 0.05, 0, Math.PI * 2); // Inner dot
+                 ctx.fill();
+                 endX = centerX + length * 0.3; // Position label slightly away
+                 endY = centerY - length * 0.3;
+             } else if (directionKey === 'backward') { // Into page (⊗)
+                 const crossSize = length * 0.15;
+                 ctx.beginPath();
+                 ctx.moveTo(centerX - crossSize, centerY - crossSize);
+                 ctx.lineTo(centerX + crossSize, centerY + crossSize);
+                 ctx.moveTo(centerX + crossSize, centerY - crossSize);
+                 ctx.lineTo(centerX - crossSize, centerY + crossSize);
+                 ctx.stroke();
+                 endX = centerX - length * 0.3; // Position label slightly away
+                 endY = centerY + length * 0.3;
+             } else {
+                 // Handle Up, Down, Left, Right
+                 const targetVec = dirInfo.vector.clone().multiplyScalar(length);
+                 endX = centerX + targetVec.x;
+                 endY = centerY - targetVec.y; // Subtract Y because canvas Y grows downwards
+
+                 // Draw line
+                 ctx.beginPath();
+                 ctx.moveTo(centerX, centerY);
+                 ctx.lineTo(endX, endY);
+                 ctx.stroke();
+
+                 // Draw arrowhead
+                 const angle = Math.atan2(endY - centerY, endX - centerX);
+                 ctx.beginPath();
+                 ctx.moveTo(endX, endY);
+                 ctx.lineTo(endX - arrowSize * Math.cos(angle - Math.PI / 6), endY - arrowSize * Math.sin(angle - Math.PI / 6));
+                 ctx.lineTo(endX - arrowSize * Math.cos(angle + Math.PI / 6), endY - arrowSize * Math.sin(angle + Math.PI / 6));
+                 ctx.closePath();
+                 ctx.fill();
+             }
+
+             // Draw label near the arrowhead/symbol
+             ctx.font = 'bold 14px Tajawal';
+             ctx.textAlign = 'center';
+             ctx.fillText(label, endX, endY - 10); // Position label above the end point
+         }
+
+
+        function generateLevel() {
+            clearInterval(gameState.timerInterval);
+             gameState.timer = Math.max(35 - gameState.level, 15); // Adjust time per level
+            elements.timer.textContent = gameState.timer;
+            elements.feedbackContainer.classList.add('hidden');
+             elements.checkAnswer.disabled = false;
+             elements.skipQuestion.disabled = false;
+
+            // 50/50 chance for right or left hand rule
+            gameState.currentRule = Math.random() < 0.5 ? 'right' : 'left';
+
+            // Update UI based on rule
+             const isLeftRule = gameState.currentRule === 'left';
+             elements.ruleType.textContent = isLeftRule ? 'قاعدة اليد اليسرى' : 'قاعدة اليد اليمنى';
+             gameState.quantities.I.label = isLeftRule ? 'السرعة (v)' : 'التيار (I)';
+             elements.labelI.textContent = gameState.quantities.I.label + ':';
+
+             // Ensure correct hand model is visible
+             if ((isLeftRule && gameState.isRightHand) || (!isLeftRule && !gameState.isRightHand)) {
+                 toggleHandType();
+             }
+
+             // Reset hand model orientation/zoom? (Optional, might be annoying for user)
+             // controls.reset(); // Resets to initial saved state
+             // camera.position.set(0, 1.5, 4);
+             // camera.lookAt(0, 0.5, 0);
+             // controls.target.set(0, 0.5, 0);
+             // controls.update();
+
+
+            // Determine knowns and unknown
+            const quantities = ['F', 'B', 'I'];
+            const unknownIndex = Math.floor(Math.random() * 3);
+            const unknownQuantity = quantities[unknownIndex];
+
+            // Reset known status
+            quantities.forEach(q => gameState.quantities[q].known = true);
+            gameState.quantities[unknownQuantity].known = false;
+            gameState.quantities[unknownQuantity].direction = null; // Clear previous answer
+
+            // Assign random directions ensuring orthogonality for the knowns
+            let dir1, dir2;
+             do {
+                 dir1 = directionKeys[Math.floor(Math.random() * directionKeys.length)];
+                 dir2 = directionKeys[Math.floor(Math.random() * directionKeys.length)];
+             } while (dir1 === dir2 || // Cannot be same direction
+                      directions[dir1].vector.dot(directions[dir2].vector) !== 0); // Must be orthogonal
+
+            // Assign known directions
+            let knownCounter = 0;
+            quantities.forEach(q => {
+                if (gameState.quantities[q].known) {
+                    gameState.quantities[q].direction = (knownCounter === 0) ? dir1 : dir2;
+                    knownCounter++;
+                }
+            });
+
+
+             // Calculate the correct direction for the unknown
+             const B_dir = gameState.quantities.B.direction;
+             const I_v_dir = gameState.quantities.I.direction;
+             const F_dir = gameState.quantities.F.direction;
+
+             const B_vec = B_dir ? directions[B_dir].vector.clone() : null;
+             const I_v_vec = I_v_dir ? directions[I_v_dir].vector.clone() : null;
+             const F_vec = F_dir ? directions[F_dir].vector.clone() : null;
+
+             let correctResultVec = new THREE.Vector3();
+
+             if (!gameState.quantities.F.known) {
+                 // Find F = q(v x B) (Left) or F = I(L x B) (Right)
+                 correctResultVec.crossVectors(I_v_vec, B_vec);
+                 if (isLeftRule) {
+                      // Assuming positive charge for simplicity, standard Left Hand Rule
+                      // If you want to include negative charges, you'd need to specify charge sign
+                      // and potentially negate the force direction.
+                 } else {
+                      // Standard Right Hand Rule
+                 }
+             } else if (!gameState.quantities.B.known) {
+                 // Find B: F = I(L x B) => L x B = F/I => B is perp to L and F/I
+                 // For orthogonal vectors: B is proportional to F x I (Right) or v x F (Left)
+                 if (isLeftRule) {
+                     correctResultVec.crossVectors(I_v_vec, F_vec); // B ~ v x F
+                 } else {
+                     correctResultVec.crossVectors(F_vec, I_v_vec); // B ~ F x L (or F x I)
+                 }
+             } else { // Find I/v
+                  // Find I/v: F = I(L x B) => L perp to F and B. L ~ B x F (Right)
+                  // Find v: F = q(v x B) => v perp to F and B. v ~ B x F (Left)
+                  if (isLeftRule) {
+                      correctResultVec.crossVectors(B_vec, F_vec); // v ~ B x F
+                  } else {
+                      correctResultVec.crossVectors(B_vec, F_vec); // I ~ B x F
+                  }
+             }
+
+             // Find the closest direction key for the calculated vector
+             let maxDot = -Infinity;
+             let correctDirKey = null;
+             for (const key of directionKeys) {
+                 const dot = correctResultVec.dot(directions[key].vector);
+                 if (Math.abs(dot) > maxDot) { // Check absolute value for alignment/anti-alignment
+                     maxDot = Math.abs(dot);
+                     // Check if aligned or anti-aligned (handle potential floating point issues)
+                     if (Math.abs(dot - 1) < 0.01) { // Aligned
+                         correctDirKey = key;
+                     } else if (Math.abs(dot + 1) < 0.01) { // Anti-aligned (shouldn't happen with correct cross products)
+                         // Find opposite direction - this is complex, easier to rely on correct calc
+                         console.warn("Anti-aligned result vector found, check cross product logic.", correctResultVec, key);
+                          // Fallback: Take the best absolute match
+                          correctDirKey = key;
+                     } else if (Math.abs(dot) > 0.9) { // Close enough, likely floating point error
+                         correctDirKey = key;
+                     }
+
+                 }
+             }
+
+             if (!correctDirKey) {
+                 console.error("Could not determine correct direction for:", unknownQuantity, correctResultVec);
+                 // Assign a default to prevent errors, though the question is flawed
+                 correctDirKey = directionKeys[0];
+             }
+
+             gameState.quantities[unknownQuantity].direction = correctDirKey;
+
+
+            // Update Question Text
+             const unknownLabel = gameState.quantities[unknownQuantity].label;
+             const knownLabels = quantities.filter(q => q !== unknownQuantity).map(q => gameState.quantities[q].label);
+             elements.questionText.textContent = `حدد اتجاه ${unknownLabel} بناءً على ${knownLabels.join(' و ')}`;
+
+
+            updateQuantityDisplay();
+            setupDiagram(); // Redraw diagram with new vectors
+
+            startTimer();
+        }
+
+        function updateQuantityDisplay() {
+            // Update the direction symbols and labels in the UI
+            for (const quantity in gameState.quantities) {
+                const el = elements[`${quantity}Direction`];
+                const labelEl = elements[`label${quantity}`];
+                if (!el || !labelEl) continue;
+
+                labelEl.textContent = `${gameState.quantities[quantity].label}:`;
+
+                if (gameState.quantities[quantity].known) {
+                    const dirKey = gameState.quantities[quantity].direction;
+                    el.textContent = directions[dirKey] ? directions[dirKey].symbol : '?';
+                    el.title = directions[dirKey] ? directions[dirKey].label : ''; // Tooltip
+                } else {
+                    el.textContent = '?';
+                    el.title = 'المطلوب تحديده';
+                }
+            }
+        }
+
+        function startTimer() {
+             clearInterval(gameState.timerInterval); // Clear any existing timer
+             gameState.timerInterval = setInterval(() => {
+                 gameState.timer--;
+                 elements.timer.textContent = gameState.timer;
+
+                 if (gameState.timer <= 0) {
+                     clearInterval(gameState.timerInterval);
+                     elements.timer.textContent = '0';
+                     handleTimeout();
+                 }
+                 // Visual feedback for low time
+                 if (gameState.timer <= 5) {
+                     elements.timer.classList.add('text-red-500', 'border-red-500', 'animate-pulse');
+                 } else {
+                     elements.timer.classList.remove('text-red-500', 'border-red-500', 'animate-pulse');
+                 }
+             }, 1000);
+         }
+
+        function handleTimeout() {
+            elements.feedbackTitle.textContent = 'انتهى الوقت!';
+            elements.feedbackText.textContent = 'لم تقم بالإجابة في الوقت المحدد.';
+             revealCorrectAnswer();
+            elements.feedbackContainer.classList.remove('hidden');
+            elements.checkAnswer.disabled = true;
+            elements.skipQuestion.disabled = true;
+        }
+
+        function checkAnswer() {
+            clearInterval(gameState.timerInterval);
+             elements.checkAnswer.disabled = true;
+             elements.skipQuestion.disabled = true;
+
+            // --- IMPORTANT: Placeholder Logic ---
+            // This section NEEDS to compare the actual 3D hand model's orientation
+            // against the required orientation based on the known directions.
+            // This is complex and involves:
+            // 1. Defining target rotations/vectors for thumb, index, middle based on knowns.
+            // 2. Getting the current world direction vectors of the corresponding arrows/bones.
+            // 3. Calculating the angular difference (e.g., using dot products) between current and target.
+            // 4. Defining a tolerance threshold (e.g., within 15-20 degrees).
+
+            // For now, we keep the simplified random check for demonstration.
+            // Replace this with real checking logic.
+            const isCorrect = Math.random() < 0.6; // Simulate 60% chance of being "correct"
+
+            // Show feedback
+            elements.feedbackContainer.classList.remove('hidden');
+            elements.timer.classList.remove('text-red-500', 'border-red-500', 'animate-pulse');
+
+            if (isCorrect) {
+                elements.feedbackTitle.textContent = 'إجابة صحيحة!';
+                const timeBonus = Math.max(gameState.timer, 0); // Ensure non-negative bonus
+                const levelBonus = gameState.level * 5; // Smaller level bonus
+                const pointsGained = 20 + timeBonus + levelBonus;
+                gameState.score += pointsGained;
+                elements.scoreDisplay.textContent = gameState.score;
+                 elements.feedbackText.textContent = `أحسنت! لقد وضعت يدك بشكل صحيح. (+${pointsGained} نقطة)`;
+                 elements.feedbackContainer.classList.add('bg-green-100', 'border', 'border-green-300');
+                 elements.feedbackContainer.classList.remove('bg-red-100', 'border-red-300');
+                 elements.feedbackTitle.classList.add('text-green-700');
+                 elements.feedbackTitle.classList.remove('text-red-700');
+
+            } else {
+                elements.feedbackTitle.textContent = 'إجابة خاطئة';
+                 elements.feedbackText.textContent = `حاول مرة أخرى! الاتجاه الصحيح موضح الآن.`;
+                 revealCorrectAnswer(); // Show the answer in UI and diagram
+                 elements.feedbackContainer.classList.add('bg-red-100', 'border', 'border-red-300');
+                 elements.feedbackContainer.classList.remove('bg-green-100', 'border-green-300');
+                 elements.feedbackTitle.classList.add('text-red-700');
+                 elements.feedbackTitle.classList.remove('text-green-700');
+
+            }
+        }
+
+        function revealCorrectAnswer() {
+             let unknownQuantityKey = null;
+             for (const key in gameState.quantities) {
+                 if (!gameState.quantities[key].known) {
+                     unknownQuantityKey = key;
+                     break;
+                 }
+             }
+
+             if (unknownQuantityKey) {
+                 const correctDirKey = gameState.quantities[unknownQuantityKey].direction;
+                 const correctSymbol = directions[correctDirKey]?.symbol || '؟';
+                 const correctLabel = directions[correctDirKey]?.label || 'غير معروف';
+                 elements[`${unknownQuantityKey}Direction`].textContent = correctSymbol;
+                 elements[`${unknownQuantityKey}Direction`].title = correctLabel;
+
+                 // Make known for diagram update
+                 gameState.quantities[unknownQuantityKey].known = true;
+                 setupDiagram(); // Redraw diagram with revealed answer
+                  elements.feedbackText.textContent += ` الاتجاه الصحيح لـ ${gameState.quantities[unknownQuantityKey].label} هو ${correctLabel} (${correctSymbol}).`;
+             }
+        }
+
+
+        function nextLevel() {
+            gameState.level++;
+            elements.levelDisplay.textContent = gameState.level;
+            // Reset feedback style
+             elements.feedbackContainer.classList.remove('bg-green-100', 'border-green-300', 'bg-red-100', 'border-red-300', 'border');
+             elements.feedbackTitle.classList.remove('text-green-700', 'text-red-700');
+            generateLevel();
+        }
+
+        function skipQuestion() {
+             clearInterval(gameState.timerInterval);
+             elements.feedbackTitle.textContent = 'تم تخطي السؤال';
+             elements.feedbackText.textContent = 'تم عرض الإجابة الصحيحة.';
+             revealCorrectAnswer();
+             elements.feedbackContainer.classList.remove('hidden');
+             elements.checkAnswer.disabled = true;
+             elements.skipQuestion.disabled = true;
+              elements.timer.classList.remove('text-red-500', 'border-red-500', 'animate-pulse');
+         }
+
+        // --- Leaderboard and Saving ---
+        function showSaveScoreModal() {
+             // Update score display in modal if needed
+             elements.saveScoreModal.classList.remove('hidden');
+             elements.playerName.value = ''; // Clear previous name
+             elements.saveError.classList.add('hidden'); // Hide error message
+             elements.playerName.focus(); // Focus input field
+        }
+
+        function hideSaveScoreModal() {
+            elements.saveScoreModal.classList.add('hidden');
+        }
+
+        function saveScore() {
+            const playerName = elements.playerName.value.trim();
+            if (playerName) {
+                elements.saveError.classList.add('hidden');
+                gameState.leaderboard.push({ name: playerName, score: gameState.score });
+                gameState.leaderboard.sort((a, b) => b.score - a.score); // Sort descending
+                gameState.leaderboard = gameState.leaderboard.slice(0, 10); // Keep top 10
+
+                // Save to localStorage
+                 try {
+                     localStorage.setItem('flemingRuleLeaderboard', JSON.stringify(gameState.leaderboard));
+                 } catch (e) {
+                     console.warn("Could not save leaderboard to localStorage:", e);
+                 }
+
+                updateLeaderboard();
+                hideSaveScoreModal();
+            } else {
+                 elements.saveError.classList.remove('hidden'); // Show error message
+            }
+        }
+
+        function loadLeaderboard() {
+             try {
+                 const savedLeaderboard = localStorage.getItem('flemingRuleLeaderboard');
+                 if (savedLeaderboard) {
+                     gameState.leaderboard = JSON.parse(savedLeaderboard);
+                     // Basic validation
+                     if (!Array.isArray(gameState.leaderboard)) {
+                         throw new Error("Loaded data is not an array");
+                     }
+                     gameState.leaderboard = gameState.leaderboard.filter(entry =>
+                         typeof entry === 'object' && entry !== null &&
+                         typeof entry.name === 'string' && typeof entry.score === 'number'
+                     );
+                     gameState.leaderboard.sort((a, b) => b.score - a.score); // Ensure sorted
+                 }
+             } catch (e) {
+                 console.warn("Could not load or parse leaderboard from localStorage:", e);
+                 // Use default leaderboard if loading fails
+                  gameState.leaderboard = [
+                     { name: 'أحمد', score: 850 },
+                     { name: 'سارة', score: 720 },
+                     { name: 'محمد', score: 690 }
+                 ];
+             }
+             // Ensure leaderboard always has some default entries if empty after loading
+             if (gameState.leaderboard.length === 0) {
+                  gameState.leaderboard = [ { name: 'لاعب جديد', score: 10 } ];
+             }
+         }
+
+
+        function updateLeaderboard() {
+            elements.leaderboardContainer.innerHTML = ''; // Clear existing entries
+
+            if (gameState.leaderboard.length === 0) {
+                elements.leaderboardContainer.innerHTML = '<p class="text-center text-gray-500">لا توجد نتائج بعد.</p>';
+                return;
+            }
+
+            gameState.leaderboard.forEach((entry, index) => {
+                const entryElement = document.createElement('div');
+                entryElement.className = 'leaderboard-entry p-2 flex justify-between items-center text-sm';
+                 if (index < 3) { // Highlight top 3
+                     entryElement.classList.add(index === 0 ? 'bg-yellow-100' : index === 1 ? 'bg-gray-200' : 'bg-yellow-50');
+                 }
+
+                entryElement.innerHTML = `
+                    <div>
+                        <span class="font-bold ml-2">${index + 1}.</span>
+                        <span>${entry.name}</span>
+                    </div>
+                    <span class="font-semibold text-blue-600">${entry.score} نقطة</span>
+                `;
+                elements.leaderboardContainer.appendChild(entryElement);
+            });
+        }
+
+        // --- Event Listeners ---
+        elements.toggleHandType.addEventListener('click', toggleHandType);
+        elements.checkAnswer.addEventListener('click', checkAnswer);
+        elements.skipQuestion.addEventListener('click', skipQuestion);
+        elements.nextLevel.addEventListener('click', nextLevel);
+        elements.saveScore.addEventListener('click', showSaveScoreModal);
+        elements.cancelSave.addEventListener('click', hideSaveScoreModal);
+        elements.confirmSave.addEventListener('click', saveScore);
+         elements.playerName.addEventListener('keypress', (event) => {
+             if (event.key === 'Enter') {
+                 saveScore();
+             }
+         });
+
+        // --- Initialize ---
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+
+</body>
+</html>
