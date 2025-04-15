@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فيزياء كرة القدم: لعبة حركة المقذوف</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f4f8;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #game-container {
+            background-color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        #field {
+            background-color: #4caf50;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 2px solid white;
+            --ball-start-x: 30px; /* Default value, will be set by JS */
+        }
+        
+        #field:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: linear-gradient(to right, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.1) 1%, transparent 1%, transparent 99%, rgba(255,255,255,0.1) 99%, rgba(255,255,255,0.1) 100%),
+                              linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.1) 1%, transparent 1%, transparent 99%, rgba(255,255,255,0.1) 99%, rgba(255,255,255,0.1) 100%);
+            background-size: 10% 10%;
+            pointer-events: none;
+        }
+        
+        #ball {
+            width: 20px;
+            height: 20px;
+            background-color: white;
+            border-radius: 50%;
+            position: absolute;
+            bottom: 0;
+            left: var(--ball-start-x); /* Use CSS variable */
+            transform: translate(-50%, 50%);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 2;
+        }
+        
+        #trajectory {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .meter-line {
+            position: absolute;
+            bottom: 0;
+            width: 2px;
+            height: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .meter-text {
+            position: absolute;
+            bottom: 5px; /* Adjusted position */
+            transform: translateX(-50%);
+            color: white;
+            font-size: 10px;
+        }
+        
+        #prediction-marker {
+            position: absolute;
+            bottom: 0;
+            width: 4px;
+            height: 40px;
+            background-color: rgba(255, 0, 0, 0.7);
+            display: none;
+        }
+        
+        #angle-indicator {
+            position: absolute;
+            bottom: 0;
+            left: var(--ball-start-x); /* Use CSS variable */
+            height: 50px;
+            transform-origin: bottom left;
+            border-left: 2px solid yellow;
+            z-index: 3;
+        }
+        
+        .form-field {
+            @apply mb-3 w-full;
+        }
+        
+        .input-field {
+            @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
+        }
+        
+        .btn {
+            @apply px-4 py-2 font-bold rounded-md transition-colors duration-200;
+        }
+        
+        .btn-primary {
+            @apply bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50;
+        }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        #formula-display {
+            font-family: 'Courier New', monospace;
+        }
+        
+        .formula-variable {
+            font-style: italic;
+        }
+        
+        #level-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        .bounce-animation {
+            animation: bounce 0.5s;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div id="game-container" class="w-full max-w-4xl rounded-lg overflow-hidden">
+        <div class="bg-blue-600 text-white p-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold">فيزياء كرة القدم: حركة المقذوف</h1>
+            <div class="flex items-center">
+                <span class="mr-2">النقاط:</span>
+                <span id="score" class="text-xl font-bold">0</span>
+            </div>
+        </div>
+        
+        <div class="p-4 bg-blue-100">
+            <p class="mb-2">توقع المسافة التي ستقطعها كرة القدم بناءً على الزاوية والسرعة المعطاة.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="bg-white p-3 rounded shadow">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold">الزاوية (θ):</h3>
+                        <div id="angle-value" class="text-lg font-semibold">45°</div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-3 rounded shadow">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold">السرعة الابتدائية (v):</h3>
+                        <div id="velocity-value" class="text-lg font-semibold">20 م/ث</div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-3 rounded shadow">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold">توقعك:</h3>
+                        <div class="tooltip">
+                            <i class="fas fa-question-circle text-blue-500"></i>
+                            <span class="tooltiptext">أدخل توقعك للمسافة التي ستقطعها الكرة أفقيًا.</span>
+                        </div>
+                    </div>
+                    <div class="flex">
+                        <input type="number" id="prediction-input" class="input-field ml-2" placeholder="أدخل المسافة بالمتر">
+                        <button id="predict-btn" class="btn btn-primary whitespace-nowrap">تقديم التوقع</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="field" class="h-64 relative bg-green-700">
+            <div id="level-badge">المستوى 1</div>
+            <div id="ball"></div>
+            <div id="trajectory"></div>
+            <div id="angle-indicator"></div>
+            <div id="prediction-marker"></div>
+            <!-- Removed the actual-marker div -->
+            <!-- Distance markers will be added dynamically -->
+        </div>
+        
+        <div id="feedback-panel" class="p-4 bg-gray-100 hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded shadow">
+                    <h3 class="font-bold text-lg mb-2">النتائج</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>توقعك:</div>
+                        <div id="prediction-result" class="font-semibold">0 م</div>
+                        
+                        <div>المسافة الفعلية:</div>
+                        <div id="actual-result" class="font-semibold">0 م</div>
+                        
+                        <div>الدقة:</div>
+                        <div id="accuracy-result" class="font-semibold">0%</div>
+                        
+                        <div>النقاط المكتسبة:</div>
+                        <div id="points-earned" class="font-semibold">+0</div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-4 rounded shadow">
+                    <h3 class="font-bold text-lg mb-2">شرح الفيزياء</h3>
+                    <p class="mb-2">يتم حساب المسافة الأفقية (المدى) في حركة المقذوف باستخدام:</p>
+                    <div id="formula-display" class="p-2 bg-gray-100 rounded mb-2">
+                        R = (v² × sin(2θ)) / g
+                    </div>
+                    <div id="calculation-breakdown" class="text-sm">
+                        حيث:<br>
+                        v = السرعة الابتدائية<br>
+                        θ = زاوية الإطلاق<br>
+                        g = تسارع الجاذبية (9.8 م/ث²)
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4 flex justify-center">
+                <button id="next-level-btn" class="btn btn-primary">
+                    المستوى التالي <i class="fas fa-arrow-right ml-2"></i> <!-- Changed icon -->
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game constants
+        const GRAVITY = 9.8; // m/s²
+        const BALL_START_X_PX = 30; // Ball starting position in pixels
+        
+        // Game state
+        let currentLevel = 1;
+        let totalScore = 0;
+        let currentAngle = 45; // degrees
+        let currentVelocity = 20; // m/s
+        let actualDistance = 0;
+        let maxFieldDistance = 100; // meters
+        
+        // DOM Elements
+        const field = document.getElementById('field');
+        const ball = document.getElementById('ball');
+        const trajectory = document.getElementById('trajectory');
+        const angleIndicator = document.getElementById('angle-indicator');
+        const predictionMarker = document.getElementById('prediction-marker');
+        const feedbackPanel = document.getElementById('feedback-panel');
+        const levelBadge = document.getElementById('level-badge');
+        
+        // Initialize the game
+        function initGame() {
+            field.style.setProperty('--ball-start-x', `${BALL_START_X_PX}px`); // Set CSS variable
+            createDistanceMarkers();
+            setAngleIndicator();
+            generateLevel();
+            
+            // Event listeners
+            document.getElementById('predict-btn').addEventListener('click', handlePrediction);
+            document.getElementById('next-level-btn').addEventListener('click', nextLevel);
+            document.getElementById('prediction-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    handlePrediction();
+                }
+            });
+        }
+        
+        // Create distance markers on the field
+        function createDistanceMarkers() {
+            const fieldWidth = field.offsetWidth;
+            const markerCount = 10;
+            const markerSpacing = fieldWidth / markerCount;
+            
+            for (let i = 1; i <= markerCount; i++) {
+                const markerPosition = i * markerSpacing;
+                const distanceValue = (i * maxFieldDistance / markerCount).toFixed(0);
+                
+                const marker = document.createElement('div');
+                marker.className = 'meter-line';
+                marker.style.left = `${markerPosition}px`;
+                
+                const label = document.createElement('div');
+                label.className = 'meter-text';
+                label.style.left = `${markerPosition}px`;
+                label.textContent = `${distanceValue}م`;
+                
+                field.appendChild(marker);
+                field.appendChild(label);
+            }
+        }
+        
+        // Set the angle indicator
+        function setAngleIndicator() {
+            angleIndicator.style.transform = `rotate(-${currentAngle}deg)`;
+        }
+        
+        // Generate a new level with random angle and velocity
+        function generateLevel() {
+            currentAngle = Math.floor(Math.random() * 65) + 10; // Random angle between 10 and 75 degrees
+            currentVelocity = Math.floor(Math.random() * 20) + 10; // Random velocity between 10 and 30 m/s
+            
+            // Update UI
+            document.getElementById('angle-value').textContent = `${currentAngle}°`;
+            document.getElementById('velocity-value').textContent = `${currentVelocity} م/ث`;
+            setAngleIndicator();
+            
+            // Calculate actual distance
+            const angleInRadians = currentAngle * Math.PI / 180;
+            actualDistance = (currentVelocity * currentVelocity * Math.sin(2 * angleInRadians)) / GRAVITY;
+            actualDistance = Math.round(actualDistance * 10) / 10; // Round to 1 decimal place
+            
+            // Reset field
+            trajectory.innerHTML = '';
+            predictionMarker.style.display = 'none';
+            ball.style.left = `${BALL_START_X_PX}px`; // Use constant
+            ball.style.bottom = '0';
+            ball.style.transform = 'translate(-50%, 50%)';
+            
+            feedbackPanel.classList.add('hidden');
+            levelBadge.textContent = `المستوى ${currentLevel}`;
+            
+            // Clear input
+            document.getElementById('prediction-input').value = '';
+            document.getElementById('prediction-input').focus();
+        }
+        
+        // Handle player prediction
+        function handlePrediction() {
+            const predictionInput = document.getElementById('prediction-input');
+            let predictedDistance = parseFloat(predictionInput.value);
+            
+            if (isNaN(predictedDistance) || predictedDistance <= 0) {
+                predictionInput.classList.add('border-red-500');
+                setTimeout(() => {
+                    predictionInput.classList.remove('border-red-500');
+                }, 1000);
+                return;
+            }
+            
+            // Display prediction marker at the user's predicted distance
+            const fieldWidth = field.offsetWidth;
+            const pixelsPerMeter = fieldWidth / maxFieldDistance;
+            const predictionPositionPixels = BALL_START_X_PX + predictedDistance * pixelsPerMeter; // Use constant
+            predictionMarker.style.left = `${predictionPositionPixels}px`;
+            predictionMarker.style.display = 'block';
+            
+            // Simulate ball trajectory
+            simulateTrajectory();
+            
+            // Calculate score
+            const accuracy = Math.max(0, 100 - Math.abs((predictedDistance - actualDistance) / actualDistance * 100));
+            const pointsEarned = Math.round(accuracy);
+            totalScore += pointsEarned;
+            
+            // Update score display with animation
+            const scoreElement = document.getElementById('score');
+            scoreElement.textContent = totalScore;
+            scoreElement.classList.add('bounce-animation');
+            setTimeout(() => {
+                scoreElement.classList.remove('bounce-animation');
+            }, 500);
+            
+            // Show feedback
+            document.getElementById('prediction-result').textContent = `${predictedDistance.toFixed(1)} م`;
+            document.getElementById('actual-result').textContent = `${actualDistance.toFixed(1)} م`;
+            document.getElementById('accuracy-result').textContent = `${accuracy.toFixed(1)}%`;
+            document.getElementById('points-earned').textContent = `+${pointsEarned}`;
+            
+            // Update calculation breakdown
+            const angleInRadians = currentAngle * Math.PI / 180;
+            const sin2theta = Math.sin(2 * angleInRadians).toFixed(3);
+            const v2 = (currentVelocity * currentVelocity).toFixed(1);
+            
+            document.getElementById('calculation-breakdown').innerHTML = `
+                حيث:<br>
+                v = ${currentVelocity} م/ث<br>
+                θ = ${currentAngle}° (${angleInRadians.toFixed(3)} راديان)<br>
+                sin(2θ) = ${sin2theta}<br>
+                g = 9.8 م/ث²<br><br>
+                R = (${v2} × ${sin2theta}) / 9.8 = ${actualDistance.toFixed(1)} م
+            `;
+            
+            feedbackPanel.classList.remove('hidden');
+        }
+        
+        // Simulate ball trajectory
+        function simulateTrajectory() {
+            trajectory.innerHTML = '';
+            
+            const angleInRadians = currentAngle * Math.PI / 180;
+            const vx = currentVelocity * Math.cos(angleInRadians);
+            const vy = currentVelocity * Math.sin(angleInRadians);
+            
+            const flightTime = (2 * vy) / GRAVITY;
+            const totalFrames = 100;
+            const timeStep = flightTime / totalFrames;
+            
+            const fieldWidth = field.offsetWidth;
+            const fieldHeight = field.offsetHeight;
+            
+            const positions = [];
+            let maxHeight = 0;
+            
+            for (let frame = 0; frame <= totalFrames; frame++) {
+                const t = frame * timeStep;
+                const x = vx * t;
+                const y = vy * t - 0.5 * GRAVITY * t * t;
+                
+                if (y > maxHeight) {
+                    maxHeight = y;
+                }
+                
+                if (y >= 0) { // Only add positions where ball is above ground
+                    positions.push({ x, y });
+                }
+            }
+            
+            // Calculate scale to fit the trajectory in the field
+            // Calculate the horizontal distance to the actual landing point
+            const pixelsPerMeter = fieldWidth / maxFieldDistance;
+            
+            // Draw trajectory path
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', '100%');
+            svg.setAttribute('height', '100%');
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            let pathData = `M ${BALL_START_X_PX} ${fieldHeight}`; // Use constant
+            
+            for (const pos of positions) {
+                const screenX = BALL_START_X_PX + pos.x * pixelsPerMeter; // Use constant
+                const screenY = fieldHeight - pos.y * pixelsPerMeter;
+                pathData += ` L ${screenX} ${screenY}`;
+            }
+            
+            path.setAttribute('d', pathData);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', 'rgba(255, 255, 255, 0.5)');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('stroke-dasharray', '5,5');
+            
+            svg.appendChild(path);
+            trajectory.appendChild(svg);
+            
+            // Removed the actual-marker display code
+            
+            // Animate the ball along the trajectory
+            animateBall(positions, pixelsPerMeter, fieldHeight);
+        }
+        
+        // Animate the ball along the trajectory
+        function animateBall(positions, pixelsPerMeter, fieldHeight) {
+            let frame = 0;
+            const totalFrames = positions.length;
+            
+            // Reset ball position
+            ball.style.left = `${BALL_START_X_PX}px`; // Use constant
+            ball.style.bottom = '0px';
+            
+            const animationInterval = setInterval(() => {
+                if (frame >= totalFrames) {
+                    clearInterval(animationInterval);
+                    return;
+                }
+                
+                const pos = positions[frame];
+                const screenX = BALL_START_X_PX + pos.x * pixelsPerMeter; // Use constant
+                const screenY = pos.y * pixelsPerMeter;
+                
+                ball.style.left = `${screenX}px`;
+                ball.style.bottom = `${screenY}px`;
+                
+                frame++;
+            }, 20);
+        }
+        
+        // Move to the next level
+        function nextLevel() {
+            currentLevel++;
+            generateLevel();
+        }
+        
+        // Initialize the game when the page loads
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
