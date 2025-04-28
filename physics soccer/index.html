@@ -10,6 +10,13 @@
         body {
             background-color: #f0f4f8;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-image: url('watermark.png'); /* Watermark added */
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-attachment: fixed; /* Keep watermark fixed */
+            background-size: contain; /* Adjust size */
+            /* Ensure content is readable over watermark */
+            /* You might need to adjust watermark transparency or content background */
         }
         
         #game-container {
@@ -521,5 +528,14 @@
         // Initialize the game when the page loads
         window.addEventListener('load', initGame);
     </script>
+
+    <div class="text-center p-4 mt-8">
+        <p class="mb-4">
+            <a href="https://wa.me/201128372268" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">
+                أعداد مستر.عبد الرحمن سليمان
+            </a>
+        </p>
+        <img src="qr-code.png" alt="QR Code لمستر عبد الرحمن سليمان" class="mx-auto w-32 h-32 border border-gray-300 p-1">
+    </div>
 </body>
 </html>

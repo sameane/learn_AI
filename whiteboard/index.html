@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollabBoard - Secure Interactive Online Whiteboard for Tutoring</title>
+    <!-- Tailwind CSS via CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+            overflow-x: hidden;
+            background-color: #f8fafc;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        }
+        
+        .whiteboard-container {
+            background-color: white;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            touch-action: none;
+            overflow: hidden;
+        }
+        
+        .toolbox button.active {
+            background-color: #e0e7ff;
+            color: #4f46e5;
+            border-color: #4f46e5;
+        }
+        
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        
+        .color-swatch.active {
+            border-color: #111827;
+            transform: scale(1.2);
+        }
+        
+        #drawingCanvas {
+            background-color: white;
+            cursor: crosshair;
+        }
+        
+        .video-stream {
+            background-color: #334155;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .sticky-note {
+            position: absolute;
+            background-color: #fef08a;
+            min-width: 150px;
+            min-height: 150px;
+            padding: 10px;
+            box-shadow: 3px 3px 5px rgba(0,0,0,0.1);
+            cursor: move;
+            z-index: 100;
+            border-radius: 2px;
+        }
+        
+        .shape {
+            position: absolute;
+            border: 2px solid black;
+            z-index: 90;
+            cursor: move;
+        }
+        
+        .sticker {
+            position: absolute;
+            font-size: 2.5rem;
+            cursor: move;
+            z-index: 95;
+        }
+        
+        .tool-section {
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .session-link {
+            background-color: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+            word-break: break-all;
+        }
+        
+        .session-btn {
+            background-color: #4f46e5;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .session-btn:hover {
+            background-color: #4338ca;
+        }
+        
+        .chat-message {
+            border-radius: 18px;
+            padding: 8px 12px;
+            margin: 4px 0;
+            max-width: 80%;
+        }
+        
+        .chat-message.sent {
+            background-color: #e0e7ff;
+            margin-left: auto;
+            border-top-right-radius: 4px;
+        }
+        
+        .chat-message.received {
+            background-color: #f3f4f6;
+            margin-right: auto;
+            border-top-left-radius: 4px;
+        }
+        
+        .chat-input {
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            padding: 8px 16px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        
+        .chat-input:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c7d2fe;
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a5b4fc;
+        }
+        
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+        }
+        
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            border-radius: 4px;
+            background-color: #1f2937;
+            color: white;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            z-index: 1000;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            .layout-container {
+                flex-direction: column;
+            }
+            
+            .sidebar, .chat-panel {
+                width: 100%;
+                max-width: 100%;
+            }
+        }
+        
+        .infinite-canvas {
+            position: relative;
+            width: 3000px;
+            height: 2000px;
+            transform-origin: 0 0;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .badge-green {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        
+        .badge-red {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+        
+        /* Password strength indicator */
+        .password-strength {
+            height: 5px;
+            border-radius: 5px;
+            margin-top: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .strength-weak {
+            background-color: #ef4444;
+            width: 30%;
+        }
+        
+        .strength-medium {
+            background-color: #f59e0b;
+            width: 60%;
+        }
+        
+        .strength-strong {
+            background-color: #10b981;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="gradient-bg text-white py-3 px-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center">
+            <h1 class="text-2xl font-bold">CollabBoard</h1>
+            <span class="ml-2 px-2 py-1 bg-indigo-800 text-xs rounded-lg">Tutoring Edition</span>
+            <span id="session-title-display" class="ml-4 text-sm font-medium text-indigo-200"></span> <!-- Added Session Title Display -->
+        </div>
+        <div class="flex items-center space-x-4">
+            <div class="relative" id="session-info">
+                <button class="session-btn flex items-center" id="share-session">
+                    <i class="fas fa-link mr-2"></i>
+                    <span>Share Session</span>
+                </button>
+                <div class="absolute right-0 mt-2 bg-white p-3 rounded-lg shadow-lg border border-gray-200 hidden" style="width: 300px; z-index: 1000;" id="share-popup">
+                    <p class="text-sm font-medium text-gray-700 mb-2">Session Link (Only users with this link can join)</p>
+                    <div class="flex mb-3">
+                        <input type="text" class="session-link flex-grow mr-2" id="session-link" readonly value="https://collabboard.edu/s/abc123xyz789">
+                        <button class="text-indigo-600 hover:text-indigo-800" id="copy-link">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <div class="mb-3" id="password-section">
+                        <div class="flex items-center justify-between">
+                            <label for="session-password" class="text-sm text-gray-600 font-medium">Session Password</label>
+                            <div class="badge badge-green" id="password-status">ENABLED</div>
+                        </div>
+                        <div class="flex mt-1">
+                            <input type="text" id="session-password" class="flex-grow session-link mr-2" value="tutoring2023" readonly>
+                            <button class="text-indigo-600 hover:text-indigo-800" id="copy-password">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center mt-2">
+                            <input type="checkbox" id="require-password" class="mr-2" checked>
+                            <label for="require-password" class="text-sm text-gray-600">Require password authentication</label>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-2">
+                        <i class="fas fa-shield-alt mr-1"></i> Only users with the session link or session name and password can join.
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center bg-indigo-800 bg-opacity-50 rounded-full py-1 px-3">
+                <span class="h-2 w-2 bg-green-400 rounded-full mr-2"></span>
+                <span class="text-sm">3 participants</span>
+            </div>
+            <div class="relative">
+                <button class="w-10 h-10 rounded-full bg-indigo-700 flex items-center justify-center font-bold">
+                    JS
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <main class="flex-grow flex layout-container">
+        <!-- Left Toolbar -->
+        <aside class="w-20 bg-white border-r border-gray-200 flex flex-col items-center py-4">
+            <div class="toolbox flex flex-col items-center space-y-5">
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100 active" data-tool="pen" data-tooltip="Pen">
+                    <i class="fas fa-pen text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="marker" data-tooltip="Marker">
+                    <i class="fas fa-highlighter text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="eraser" data-tooltip="Eraser">
+                    <i class="fas fa-eraser text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="shape" data-tooltip="Shapes">
+                    <i class="fas fa-shapes text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="text" data-tooltip="Text">
+                    <i class="fas fa-font text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="sticky" data-tooltip="Sticky Notes">
+                    <i class="fas fa-sticky-note text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="sticker" data-tooltip="Stickers">
+                    <i class="fas fa-smile text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="mindmap" data-tooltip="Mind Map">
+                    <i class="fas fa-project-diagram text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="select" data-tooltip="Select">
+                    <i class="fas fa-mouse-pointer text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="hand" data-tooltip="Hand Tool">
+                    <i class="fas fa-hand-paper text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="mt-auto flex flex-col items-center space-y-4">
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="clear" data-tooltip="Clear All">
+                    <i class="fas fa-trash-alt text-lg"></i>
+                </button>
+                <button class="tooltip w-12 h-12 rounded-lg flex items-center justify-center hover:bg-gray-100" data-tool="save" data-tooltip="Save Board">
+                    <i class="fas fa-save text-lg"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Center Whiteboard Area -->
+        <div class="flex-grow flex flex-col">
+            <!-- Tool Configuration Bar -->
+            <div class="bg-white border-b border-gray-200 p-3">
+                <div class="flex items-center justify-between">
+                    <!-- Selected Tool Info -->
+                    <div class="flex items-center">
+                        <span class="font-medium text-gray-700 mr-4">Pen Tool</span>
+                        
+                        <!-- Color Picker -->
+                        <div class="flex items-center space-x-2 mr-6">
+                            <div class="color-swatch active" style="background-color: #000000;" data-color="#000000"></div>
+                            <div class="color-swatch" style="background-color: #dc2626;" data-color="#dc2626"></div>
+                            <div class="color-swatch" style="background-color: #2563eb;" data-color="#2563eb"></div>
+                            <div class="color-swatch" style="background-color: #16a34a;" data-color="#16a34a"></div>
+                            <div class="color-swatch" style="background-color: #ca8a04;" data-color="#ca8a04"></div>
+                            <div class="color-swatch" style="background-color: #9333ea;" data-color="#9333ea"></div>
+                            <button class="ml-2 text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-plus text-sm"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Stroke Width -->
+                        <div class="flex items-center mr-6">
+                            <span class="text-gray-600 text-sm mr-2">Size:</span>
+                            <input type="range" min="1" max="20" value="3" class="w-24" id="stroke-width">
+                        </div>
+                        
+                        <!-- Opacity -->
+                        <div class="flex items-center">
+                            <span class="text-gray-600 text-sm mr-2">Opacity:</span>
+                            <input type="range" min="10" max="100" value="100" class="w-24" id="stroke-opacity">
+                        </div>
+                    </div>
+                    
+                    <!-- Canvas Controls -->
+                    <div class="flex items-center">
+                        <button class="tooltip mx-2 p-2 rounded hover:bg-gray-100" data-tooltip="Zoom Out">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                        <span class="text-gray-700">100%</span>
+                        <button class="tooltip mx-2 p-2 rounded hover:bg-gray-100" data-tooltip="Zoom In">
+                            <i class="fas fa-search-plus"></i>
+                        </button>
+                        <button class="tooltip mx-2 p-2 rounded hover:bg-gray-100" data-tooltip="Reset View">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Shape Options (Hidden by default) -->
+                <div class="flex items-center mt-3 hidden" id="shape-options">
+                    <button class="p-2 mr-2 border rounded-lg hover:bg-gray-100" data-shape="rect">
+                        <i class="far fa-square"></i>
+                    </button>
+                    <button class="p-2 mr-2 border rounded-lg hover:bg-gray-100" data-shape="circle">
+                        <i class="far fa-circle"></i>
+                    </button>
+                    <button class="p-2 mr-2 border rounded-lg hover:bg-gray-100" data-shape="line">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="p-2 mr-2 border rounded-lg hover:bg-gray-100" data-shape="arrow">
+                        <i class="fas fa-long-arrow-alt-right"></i>
+                    </button>
+                    <button class="p-2 mr-2 border rounded-lg hover:bg-gray-100" data-shape="triangle">
+                        <i class="fas fa-play transform rotate-90"></i>
+                    </button>
+                    <div class="ml-4 flex items-center">
+                        <span class="text-gray-600 text-sm mr-2">Fill:</span>
+                        <input type="checkbox" id="shape-fill">
+                    </div>
+                </div>
+                
+                <!-- Sticker Options (Hidden by default) -->
+                <div class="flex items-center flex-wrap mt-3 hidden" id="sticker-options">
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="👍">👍</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="⭐">⭐</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="❤️">❤️</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="🎓">🎓</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="📚">📚</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="✅">✅</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="❓">❓</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="💡">💡</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="🔍">🔍</button>
+                    <button class="p-2 text-2xl hover:bg-gray-100 rounded" data-sticker="⚠️">⚠️</button>
+                </div>
+            </div>
+
+            <!-- Canvas Area -->
+            <div class="flex-grow whiteboard-container relative overflow-auto" id="canvas-container">
+                <div class="infinite-canvas" id="canvas-wrapper">
+                    <canvas id="drawingCanvas" width="3000" height="2000"></canvas>
+                    <!-- Objects like sticky notes and shapes will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar (Chat & Collaboration) -->
+        <aside class="sidebar w-80 bg-white border-l border-gray-200 flex flex-col h-full">
+            <!-- Tabs Navigation -->
+            <div class="flex border-b border-gray-200">
+                <button class="flex-1 py-3 text-center font-medium text-indigo-600 border-b-2 border-indigo-600" data-tab="participants">
+                    <i class="fas fa-users mr-2"></i>Participants
+                </button>
+                <button class="flex-1 py-3 text-center font-medium text-gray-500 hover:text-gray-700" data-tab="chat">
+                    <i class="fas fa-comment-alt mr-2"></i>Chat
+                </button>
+            </div>
+            
+            <!-- Participants Tab -->
+            <div class="tab-content p-4 overflow-y-auto flex-grow" id="participants-tab">
+                <div class="mb-6">
+                    <h3 class="text-sm font-semibold text-gray-600 mb-3 flex justify-between items-center">
+                        <span>TUTORING SESSION</span>
+                        <span class="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">LIVE</span>
+                    </h3>
+                    
+                    <div class="flex justify-between mb-4">
+                        <button class="flex-1 mr-2 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+                            <i class="fas fa-video mr-1"></i> Start Video
+                        </button>
+                        <button class="flex-1 ml-2 px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300">
+                            <i class="fas fa-phone-alt mr-1"></i> Start Audio
+                        </button>
+                    </div>
+                    
+                    <button class="w-full px-3 py-2 flex items-center justify-center bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 mb-4">
+                        <i class="fas fa-desktop mr-1"></i> Share Screen
+                    </button>
+                </div>
+                
+                <h3 class="text-sm font-semibold text-gray-600 mb-3">PEOPLE (3)</h3>
+                
+                <!-- Participant List -->
+                <div class="space-y-3">
+                    <!-- Host -->
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-medium">JS</div>
+                            <div class="ml-3">
+                                <div class="font-medium">John Smith</div>
+                                <div class="text-xs text-gray-500">Tutor (Host)</div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <span class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer">
+                                <i class="fas fa-video text-green-600"></i>
+                            </span>
+                            <span class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer">
+                                <i class="fas fa-microphone text-green-600"></i>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Other Participants -->
+                    <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">AJ</div>
+                            <div class="ml-3">
+                                <div class="font-medium">Alex Johnson</div>
+                                <div class="text-xs text-gray-500">Student</div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <span class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer">
+                                <i class="fas fa-video-slash text-gray-500"></i>
+                            </span>
+                            <span class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer">
+                                <i class="fas fa-microphone text-green-600"></i>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-pink-500 rounded-full flex items-center justify-center text-white font-medium">SL</div>
+                            <div class="ml-3">
+                                <div class="font-medium">Sarah Lee</div>
+                                <div class="text-xs text-gray-500">Student</div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <span class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer">
+                                <i class="fas fa-video text-green-600"></i>
+                            </span>
+                            <span class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 cursor-pointer">
+                                <i class="fas fa-microphone-slash text-gray-500"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Tab (Hidden by default) -->
+            <div class="tab-content hidden flex flex-col h-full" id="chat-tab">
+                <div class="flex-grow p-4 overflow-y-auto" id="chat-messages">
+                    <!-- Messages will be added here -->
+                    <div class="chat-message received">
+                        <div class="text-xs text-gray-500 mb-1">John Smith (Tutor)</div>
+                        <div>Welcome everyone! Let's start with reviewing the geometry problems.</div>
+                    </div>
+                    
+                    <div class="chat-message sent">
+                        <div class="text-xs text-gray-500 mb-1">You</div>
+                        <div>I'm having trouble with question #3. Can we look at that one?</div>
+                    </div>
+                    
+                    <div class="chat-message received">
+                        <div class="text-xs text-gray-500 mb-1">Sarah Lee</div>
+                        <div>I'd like to understand that one too!</div>
+                    </div>
+                    
+                    <div class="chat-message received">
+                        <div class="text-xs text-gray-500 mb-1">John Smith (Tutor)</div>
+                        <div>Sure! I'll draw the triangle on the whiteboard and show you the approach.</div>
+                    </div>
+                    
+                    <div class="chat-message received">
+                        <div class="text-xs text-gray-500 mb-1">John Smith (Tutor)</div>
+                        <div>Here's the formula sheet we'll be using today</div>
+                        <div class="mt-2 p-2 bg-gray-50 rounded text-sm flex items-center">
+                            <i class="far fa-file-pdf text-red-500 text-lg mr-2"></i>
+                            <span>Geometry_Formulas.pdf</span>
+                            <button class="ml-auto text-indigo-600 hover:text-indigo-800">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4 border-t border-gray-200">
+                    <form id="chat-form" class="flex items-center">
+                        <button type="button" class="text-gray-500 hover:text-gray-700 mr-2">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <input type="text" class="chat-input flex-grow" placeholder="Type a message...">
+                        <button type="submit" class="ml-2 w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </aside>
+    </main>
+    
+    <!-- Video Conference Modal (Hidden by default) -->
+    <div class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center" id="video-conference">
+        <div class="bg-white rounded-lg shadow-xl w-5/6 max-w-4xl">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="font-medium text-lg">Video Conference</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="close-video">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-6">
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="video-stream aspect-video flex items-center justify-center">
+                        <div class="text-center text-white">
+                            <div class="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white font-medium text-2xl mx-auto mb-2">JS</div>
+                            <div>John Smith</div>
+                        </div>
+                    </div>
+                    
+                    <div class="video-stream aspect-video flex items-center justify-center">
+                        <div class="text-center text-white">
+                            <div class="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium text-2xl mx-auto mb-2">AJ</div>
+                            <div>Alex Johnson</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-center space-x-4">
+                    <button class="p-3 bg-gray-200 rounded-full hover:bg-gray-300">
+                        <i class="fas fa-microphone text-gray-700"></i>
+                    </button>
+                    <button class="p-3 bg-gray-200 rounded-full hover:bg-gray-300">
+                        <i class="fas fa-video text-gray-700"></i>
+                    </button>
+                    <button class="p-3 bg-red-500 rounded-full hover:bg-red-600">
+                        <i class="fas fa-phone-slash text-white"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Join Session Modal -->
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" id="join-session-modal">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Join Tutoring Session</h2>
+                <p class="text-gray-600">Enter session details to join the whiteboard</p>
+            </div>
+            
+            <form id="join-form">
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2" for="access-method">Access Method</label>
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div class="border border-gray-300 rounded-md p-3 flex items-center cursor-pointer bg-indigo-50 border-indigo-500" id="link-access">
+                            <input type="radio" id="access-link" name="access-method" value="link" checked class="mr-2">
+                            <label for="access-link" class="cursor-pointer">
+                                <div class="font-medium">Session Link</div>
+                                <div class="text-xs text-gray-500">You have a direct link</div>
+                            </label>
+                        </div>
+                        <div class="border border-gray-300 rounded-md p-3 flex items-center cursor-pointer" id="name-pass-access">
+                            <input type="radio" id="access-credentials" name="access-method" value="credentials" class="mr-2">
+                            <label for="access-credentials" class="cursor-pointer">
+                                <div class="font-medium">Session Name & Password</div>
+                                <div class="text-xs text-gray-500">Enter session credentials</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Session Credentials Section (initially hidden) -->
+                <div id="credentials-section" class="hidden">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="session-name">Session Name</label>
+                        <input type="text" id="session-name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter session name">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-medium mb-2" for="session-password">Session Password</label>
+                        <div class="relative">
+                            <input type="password" id="session-password-input" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter session password">
+                            <button type="button" id="toggle-password" class="absolute right-2 top-2 text-gray-500 hover:text-gray-700">
+                                <i class="far fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="hidden text-sm text-red-500 mt-1" id="password-error">
+                            <i class="fas fa-exclamation-circle mr-1"></i> 
+                            Incorrect session name or password.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2" for="display-name">Your Name</label>
+                    <input type="text" id="display-name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter your name" required>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-medium mb-2" for="session-role">Join as</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="border border-gray-300 rounded-md p-3 flex items-center cursor-pointer bg-indigo-50 border-indigo-500">
+                            <input type="radio" id="role-student" name="role" value="student" checked class="mr-2">
+                            <label for="role-student" class="cursor-pointer">
+                                <div class="font-medium">Student</div>
+                                <div class="text-xs text-gray-500">Join the session</div>
+                            </label>
+                        </div>
+                        <div class="border border-gray-300 rounded-md p-3 flex items-center cursor-pointer">
+                            <input type="radio" id="role-tutor" name="role" value="tutor" class="mr-2">
+                            <label for="role-tutor" class="cursor-pointer">
+                                <div class="font-medium">Tutor</div>
+                                <div class="text-xs text-gray-500">Host the session</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-center">
+                    <button type="submit" class="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md">
+                        Join Session
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Canvas setup
+            const canvas = document.getElementById('drawingCanvas');
+            const ctx = canvas.getContext('2d');
+            const canvasContainer = document.getElementById('canvas-container');
+            const canvasWrapper = document.getElementById('canvas-wrapper');
+            
+            // Whiteboard state
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            let selectedTool = 'pen';
+            let strokeColor = '#000000';
+            let strokeWidth = 3;
+            let strokeOpacity = 1;
+            let scale = 1;
+            let offset = { x: 0, y: 0 };
+            
+            // Objects on canvas
+            let objects = [];
+            let selectedObject = null;
+            
+            // Tool configuration elements
+            const toolButtons = document.querySelectorAll('.toolbox button');
+            const colorSwatches = document.querySelectorAll('.color-swatch');
+            const strokeWidthInput = document.getElementById('stroke-width');
+            const strokeOpacityInput = document.getElementById('stroke-opacity');
+            const shapeOptions = document.getElementById('shape-options');
+            const stickerOptions = document.getElementById('sticker-options');
+            
+            // Tab switching
+            const tabButtons = document.querySelectorAll('[data-tab]');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            // Session handling
+            const joinForm = document.getElementById('join-form');
+            const joinModal = document.getElementById('join-session-modal');
+            const shareButton = document.getElementById('share-session');
+            const sharePopup = document.getElementById('share-popup');
+            const copyLinkButton = document.getElementById('copy-link');
+            const copyPasswordButton = document.getElementById('copy-password');
+            const sessionLinkInput = document.getElementById('session-link');
+            const sessionPasswordInput = document.getElementById('session-password');
+            const requirePasswordCheckbox = document.getElementById('require-password');
+            const passwordStatus = document.getElementById('password-status');
+            
+            // Access method switching
+            const linkAccess = document.getElementById('link-access');
+            const namePassAccess = document.getElementById('name-pass-access');
+            const credentialsSection = document.getElementById('credentials-section');
+            const accessMethodRadios = document.querySelectorAll('input[name="access-method"]');
+            const togglePasswordButton = document.getElementById('toggle-password');
+            const sessionPasswordInputField = document.getElementById('session-password-input');
+            
+            // Chat functionality
+            const chatForm = document.getElementById('chat-form');
+            const chatMessages = document.getElementById('chat-messages');
+            
+            // Initialize drawing context
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Set initial canvas position
+            canvasWrapper.style.transform = `scale(${scale})`;
+            canvasWrapper.style.transformOrigin = '0 0';
+            
+            // Access method switching
+            accessMethodRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'credentials') {
+                        credentialsSection.classList.remove('hidden');
+                        linkAccess.classList.remove('bg-indigo-50', 'border-indigo-500');
+                        namePassAccess.classList.add('bg-indigo-50', 'border-indigo-500');
+                    } else {
+                        credentialsSection.classList.add('hidden');
+                        linkAccess.classList.add('bg-indigo-50', 'border-indigo-500');
+                        namePassAccess.classList.remove('bg-indigo-50', 'border-indigo-500');
+                    }
+                });
+            });
+            
+            // Toggle password visibility
+            togglePasswordButton.addEventListener('click', function() {
+                const type = sessionPasswordInputField.getAttribute('type') === 'password' ? 'text' : 'password';
+                sessionPasswordInputField.setAttribute('type', type);
+                this.innerHTML = type === 'password' ? '<i class="far fa-eye"></i>' : '<i class="far fa-eye-slash"></i>';
+            });
+            
+            // Password requirement toggle
+            requirePasswordCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    passwordStatus.textContent = 'ENABLED';
+                    passwordStatus.classList.remove('badge-red');
+                    passwordStatus.classList.add('badge-green');
+                    sessionPasswordInput.parentElement.classList.remove('opacity-50');
+                    sessionPasswordInput.removeAttribute('disabled');
+                } else {
+                    passwordStatus.textContent = 'DISABLED';
+                    passwordStatus.classList.remove('badge-green');
+                    passwordStatus.classList.add('badge-red');
+                    sessionPasswordInput.parentElement.classList.add('opacity-50');
+                    sessionPasswordInput.setAttribute('disabled', 'disabled');
+                }
+            });
+            
+            // Tool selection
+            toolButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const tool = this.getAttribute('data-tool');
+                    
+                    // Remove active class from all buttons
+                    toolButtons.forEach(btn => btn.classList.remove('active'));
+                    
+                    // Add active class to clicked button
+                    this.classList.add('active');
+                    
+                    // Set selected tool
+                    selectedTool = tool;
+                    
+                    // Handle special tool configurations
+                    if (tool === 'shape') {
+                        shapeOptions.classList.remove('hidden');
+                        stickerOptions.classList.add('hidden');
+                    } else if (tool === 'sticker') {
+                        stickerOptions.classList.remove('hidden');
+                        shapeOptions.classList.add('hidden');
+                    } else {
+                        shapeOptions.classList.add('hidden');
+                        stickerOptions.classList.add('hidden');
+                    }
+                    
+                    // Update cursor style based on selected tool
+                    if (tool === 'hand') {
+                        canvas.style.cursor = 'grab';
+                    } else if (tool === 'select') {
+                        canvas.style.cursor = 'pointer';
+                    } else if (tool === 'eraser') {
+                        canvas.style.cursor = 'url("https://cdn.jsdelivr.net/npm/css-cursors@1.0.2/img/eraser.png"), auto';
+                    } else {
+                        canvas.style.cursor = 'crosshair';
+                    }
+                });
+            });
+            
+            // Color selection
+            colorSwatches.forEach(swatch => {
+                swatch.addEventListener('click', function() {
+                    colorSwatches.forEach(s => s.classList.remove('active'));
+                    this.classList.add('active');
+                    strokeColor = this.getAttribute('data-color');
+                });
+            });
+            
+            // Stroke width change
+            strokeWidthInput.addEventListener('input', function() {
+                strokeWidth = parseInt(this.value);
+            });
+            
+            // Stroke opacity change
+            strokeOpacityInput.addEventListener('input', function() {
+                strokeOpacity = parseInt(this.value) / 100;
+            });
+            
+            // Drawing functionality
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Touch support
+            canvas.addEventListener('touchstart', handleTouchStart);
+            canvas.addEventListener('touchmove', handleTouchMove);
+            canvas.addEventListener('touchend', handleTouchEnd);
+            
+            function handleTouchStart(e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousedown', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                canvas.dispatchEvent(mouseEvent);
+            }
+            
+            function handleTouchMove(e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousemove', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                canvas.dispatchEvent(mouseEvent);
+            }
+            
+            function handleTouchEnd(e) {
+                const mouseEvent = new MouseEvent('mouseup', {});
+                canvas.dispatchEvent(mouseEvent);
+            }
+            
+            function startDrawing(e) {
+                isDrawing = true;
+                
+                // Get canvas position relative to viewport
+                const rect = canvas.getBoundingClientRect();
+                
+                // Calculate position with scroll and scale
+                lastX = (e.clientX - rect.left) / scale;
+                lastY = (e.clientY - rect.top) / scale;
+                
+                // Start new path
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                
+                // Handle special tools
+                if (selectedTool === 'sticky') {
+                    createStickyNote(lastX, lastY);
+                    isDrawing = false;
+                } else if (selectedTool === 'sticker') {
+                    isDrawing = false;
+                }
+            }
+            
+            function draw(e) {
+                if (!isDrawing) return;
+                
+                // Get canvas position
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / scale;
+                const y = (e.clientY - rect.top) / scale;
+                
+                // Set drawing styles
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = strokeWidth;
+                ctx.globalAlpha = strokeOpacity;
+                
+                // Handle different tools
+                if (selectedTool === 'pen' || selectedTool === 'marker') {
+                    // For pen/marker, draw line from last position to current
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    
+                    // If marker, make it slightly transparent
+                    if (selectedTool === 'marker') {
+                        ctx.globalAlpha = 0.3;
+                        ctx.lineWidth = strokeWidth * 3;
+                    }
+                } else if (selectedTool === 'eraser') {
+                    // For eraser, draw white (or bg color) line
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    // Send pen/marker data
+                    sendDrawingData({ type: selectedTool, x, y, lastX, lastY, color: strokeColor, width: strokeWidth, opacity: strokeOpacity });
+
+                    // If marker, make it slightly transparent (this is local rendering, opacity sent above)
+                    if (selectedTool === 'marker') {
+                        ctx.globalAlpha = 0.3;
+                        ctx.lineWidth = strokeWidth * 3;
+                    }
+                } else if (selectedTool === 'eraser') {
+                    // For eraser, draw white (or bg color) line
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    ctx.globalCompositeOperation = 'source-over';
+                    // Send eraser data
+                    sendDrawingData({ type: 'eraser', x, y, lastX, lastY, width: strokeWidth });
+                }
+
+                // Update last position after sending data for pen/marker/eraser
+                if (selectedTool === 'pen' || selectedTool === 'marker' || selectedTool === 'eraser') {
+                    lastX = x;
+                    lastY = y;
+                }
+            }
+
+            function stopDrawing() {
+                if (!isDrawing) return; // Only stop if we were drawing
+                isDrawing = false;
+                ctx.globalAlpha = 1.0; // Reset opacity
+                // Send event indicating the drawing stroke has ended
+                sendDrawingData({ type: 'stop' });
+            }
+
+            function createStickyNote(x, y) {
+                const note = document.createElement('div');
+                note.className = 'sticky-note';
+                note.style.left = `${x}px`;
+                note.style.top = `${y}px`;
+                note.contentEditable = true;
+                note.innerHTML = 'Double-click to edit';
+                
+                // Make the note draggable
+                note.addEventListener('mousedown', dragStart);
+                
+                // Add to canvas wrapper
+                canvasWrapper.appendChild(note);
+                
+                // Add to objects list
+                objects.push({
+                    element: note,
+                    type: 'sticky',
+                    x: x,
+                    y: y
+                });
+                
+                // Focus the note for immediate editing
+                setTimeout(() => {
+                    note.focus();
+                    document.execCommand('selectAll', false, null);
+                }, 0);
+            }
+            
+            function dragStart(e) {
+                const element = e.target.closest('.sticky-note') || e.target.closest('.shape') || e.target.closest('.sticker');
+                if (!element) return;
+                
+                e.preventDefault();
+                
+                // Store initial position
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const initialLeft = parseInt(element.style.left);
+                const initialTop = parseInt(element.style.top);
+                
+                function drag(e) {
+                    // Calculate new position
+                    const dx = (e.clientX - startX) / scale;
+                    const dy = (e.clientY - startY) / scale;
+                    
+                    element.style.left = `${initialLeft + dx}px`;
+                    element.style.top = `${initialTop + dy}px`;
+                }
+                
+                function stopDrag() {
+                    document.removeEventListener('mousemove', drag);
+                    document.removeEventListener('mouseup', stopDrag);
+                }
+                
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', stopDrag);
+            }
+            
+            // Tab Switching
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetTab = button.getAttribute('data-tab');
+                    
+                    // Toggle active state on buttons
+                    tabButtons.forEach(btn => {
+                        if (btn.getAttribute('data-tab') === targetTab) {
+                            btn.classList.remove('text-gray-500');
+                            btn.classList.add('text-indigo-600', 'border-b-2', 'border-indigo-600');
+                        } else {
+                            btn.classList.remove('text-indigo-600', 'border-b-2', 'border-indigo-600');
+                            btn.classList.add('text-gray-500');
+                        }
+                    });
+                    
+                    // Show/hide tab contents
+                    tabContents.forEach(content => {
+                        if (content.id === `${targetTab}-tab`) {
+                            content.classList.remove('hidden');
+                        } else {
+                            content.classList.add('hidden');
+                        }
+                    });
+                });
+            });
+            
+            // Session Management
+            joinForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const name = document.getElementById('display-name').value;
+                const role = document.querySelector('input[name="role"]:checked').value;
+                const accessMethod = document.querySelector('input[name="access-method"]:checked').value;
+                let sessionIdentifier = ''; // Variable to hold the session name/ID
+
+                if (name.trim() === '') return;
+
+                // Validate session credentials if using name/password method
+                if (accessMethod === 'credentials') {
+                    const sessionNameInput = document.getElementById('session-name');
+                    const sessionPassword = document.getElementById('session-password-input').value;
+                    sessionIdentifier = sessionNameInput.value; // Get session name from input
+
+                    // Mock validation - in a real app, this would call an API
+                    if (sessionIdentifier !== 'math101' || sessionPassword !== 'tutoring2023') {
+                        document.getElementById('password-error').classList.remove('hidden');
+                        return; // Stop if validation fails
+                    }
+                    // Clear error if validation passes
+                    document.getElementById('password-error').classList.add('hidden');
+
+                } else {
+                    // If joining via link, use the generated sessionId (already available globally)
+                    sessionIdentifier = sessionId; // Use the globally generated sessionId
+                }
+
+                // Hide join modal
+                joinModal.classList.add('hidden');
+
+                // Update the session title display in the header
+                const sessionTitleDisplay = document.getElementById('session-title-display');
+                if (sessionTitleDisplay) {
+                    sessionTitleDisplay.textContent = `Session: ${sessionIdentifier}`;
+                }
+
+                // Add participant info
+                if (role === 'tutor') {
+                    // Add tutor controls
+                    console.log(`Joined session '${sessionIdentifier}' as tutor: ${name}`);
+                } else {
+                    // Add student controls
+                    console.log(`Joined session '${sessionIdentifier}' as student: ${name}`);
+                }
+
+                // Emit join event to server (example)
+                socket.emit('joinRoom', { sessionId: sessionIdentifier, userName: name, role: role });
+            });
+            
+            // Share Session
+            shareButton.addEventListener('click', function() {
+                if (sharePopup.classList.contains('hidden')) {
+                    sharePopup.classList.remove('hidden');
+                } else {
+                    sharePopup.classList.add('hidden');
+                }
+            });
+            
+            // Copy session link
+            copyLinkButton.addEventListener('click', function() {
+                sessionLinkInput.select();
+                document.execCommand('copy');
+                
+                // Show feedback
+                const originalIcon = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    this.innerHTML = originalIcon;
+                }, 2000);
+            });
+            
+            // Copy session password
+            copyPasswordButton.addEventListener('click', function() {
+                sessionPasswordInput.select();
+                document.execCommand('copy');
+                
+                // Show feedback
+                const originalIcon = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    this.innerHTML = originalIcon;
+                }, 2000);
+            });
+            
+            // Handle clicks outside of popup to close it
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#share-session') && !e.target.closest('#share-popup')) {
+                    sharePopup.classList.add('hidden');
+                }
+            });
+            
+            // Chat functionality
+            chatForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const input = this.querySelector('input');
+                const message = input.value.trim();
+                
+                if (message === '') return;
+                
+                // Add message to chat locally immediately
+                addChatMessage('You', message, true); // Assuming 'You' is the local user
+
+                // Send message via Socket.IO
+                sendChatMessage(message);
+
+                // Clear input
+                input.value = '';
+
+                // Remove the simulated response block
+                // setTimeout(() => { ... }, 1500);
+            });
+
+            function addChatMessage(sender, message, isSent) {
+                const messageElement = document.createElement('div');
+                messageElement.className = `chat-message ${isSent ? 'sent' : 'received'}`;
+                
+                const senderElement = document.createElement('div');
+                senderElement.className = 'text-xs text-gray-500 mb-1';
+                senderElement.textContent = sender;
+                
+                const textElement = document.createElement('div');
+                textElement.textContent = message;
+                
+                messageElement.appendChild(senderElement);
+                messageElement.appendChild(textElement);
+                
+                chatMessages.appendChild(messageElement);
+                
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            // Generate a random session ID for the example
+            const sessionId = Math.random().toString(36).substring(2, 10);
+            sessionLinkInput.value = `https://collabboard.edu/s/${sessionId}`;
+            
+            // Add sample objects to the whiteboard
+            setTimeout(() => {
+                // Add a sample sticky note
+                createStickyNote(150, 150);
+                
+                // Draw a sample diagram
+                ctx.beginPath();
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 3;
+                
+                // Draw a triangle
+                ctx.moveTo(400, 200);
+                ctx.lineTo(500, 350);
+                ctx.lineTo(300, 350);
+                ctx.closePath();
+                ctx.stroke();
+                
+                // Label the vertices
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#2563eb';
+                ctx.fillText('A', 400, 190);
+                ctx.fillText('B', 510, 350);
+                ctx.fillText('C', 290, 350);
+                
+                // Draw a midpoint line
+                ctx.beginPath();
+                ctx.strokeStyle = '#ca8a04';
+                ctx.setLineDash([5, 5]);
+                ctx.moveTo(400, 200);
+                ctx.lineTo(400, 350);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Label the height
+                ctx.fillStyle = '#ca8a04';
+                ctx.fillText('h', 410, 280);
+            }, 1000);
+
+            // --- Socket.IO Integration ---
+            // Connect to the Socket.IO server (replace with your server URL)
+            const socket = io(); // Assumes server is running on the same host/port
+
+            // Example: Listen for connection confirmation
+            socket.on('connect', () => {
+                console.log('Connected to Socket.IO server with ID:', socket.id);
+                // You can emit events here, e.g., join a room
+                // socket.emit('joinRoom', { sessionId: 'your_session_id', userName: 'Your Name' });
+            });
+
+            // Listen for drawing data from others
+            socket.on('draw', (data) => {
+                // console.log('Received drawing data:', data); // Keep for debugging if needed
+                drawRemoteData(data); // Call function to draw received data
+            });
+
+            // Listen for chat messages from others
+            socket.on('chatMessage', (data) => {
+                console.log('Received chat message:', data);
+                // Add logic here to display the received message
+                addChatMessage(data.sender, data.message, false);
+            });
+
+            // Example: Function to send drawing data
+            function sendDrawingData(data) {
+                socket.emit('draw', data);
+            }
+
+            // Function to send chat message
+            function sendChatMessage(message) {
+                // Get user's name (replace with actual logic to get the name entered in the join modal)
+                const userName = document.getElementById('display-name')?.value || 'Anonymous'; // Use entered name or default
+                socket.emit('chatMessage', { sender: userName, message: message });
+            }
+
+            // Function to draw data received from others
+            function drawRemoteData(data) {
+                // Store current context settings to restore them later
+                const originalStrokeStyle = ctx.strokeStyle;
+                const originalLineWidth = ctx.lineWidth;
+                const originalGlobalAlpha = ctx.globalAlpha;
+                const originalCompositeOperation = ctx.globalCompositeOperation;
+                const originalLineCap = ctx.lineCap;
+                const originalLineJoin = ctx.lineJoin;
+
+                // Apply styles and settings from received data
+                ctx.strokeStyle = data.color || '#000000'; // Default to black if color missing
+                ctx.lineWidth = data.width || 3;          // Default width if missing
+                ctx.globalAlpha = data.opacity || 1;      // Default opacity if missing
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                if (data.type === 'pen' || data.type === 'marker') {
+                    ctx.globalCompositeOperation = 'source-over';
+                    if (data.type === 'marker') {
+                        // Apply marker effect (adjust alpha and width)
+                        ctx.globalAlpha = data.opacity * 0.3 || 0.3; // Combine received opacity with marker effect
+                        ctx.lineWidth = (data.width || 3) * 3;
+                    }
+                    ctx.beginPath();
+                    ctx.moveTo(data.lastX, data.lastY);
+                    ctx.lineTo(data.x, data.y);
+                    ctx.stroke();
+                } else if (data.type === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.beginPath();
+                    ctx.moveTo(data.lastX, data.lastY);
+                    ctx.lineTo(data.x, data.y);
+                    ctx.stroke();
+                } else if (data.type === 'stop') {
+                    // Optional: Handle the end of a stroke if needed (e.g., for smoothing)
+                    // Currently, nothing specific needs to be done here for basic drawing.
+                }
+                // Add handling for other types like shapes, sticky notes, etc. later
+
+                // Restore original context settings
+                ctx.strokeStyle = originalStrokeStyle;
+                ctx.lineWidth = originalLineWidth;
+                ctx.globalAlpha = originalGlobalAlpha;
+                ctx.globalCompositeOperation = originalCompositeOperation;
+                ctx.lineCap = originalLineCap;
+                ctx.lineJoin = originalLineJoin;
+            }
+
+            // Modify existing functions to send data via Socket.IO
+            // Example modification for drawing:
+            // Inside the 'draw' function, after ctx.stroke():
+            // if (selectedTool === 'pen' || selectedTool === 'marker') {
+            //     sendDrawingData({ type: selectedTool, x, y, lastX, lastY, color: strokeColor, width: strokeWidth, opacity: strokeOpacity });
+            // }
+            // Inside the 'stopDrawing' function:
+            // sendDrawingData({ type: 'stop' }); // Indicate end of stroke
+
+            // Example modification for chat:
+            // Inside the chatForm submit event listener, after addChatMessage:
+            // sendChatMessage(message);
+            // Remove the simulated response setTimeout block.
+
+            // --- End Socket.IO Integration ---
+
+        });
+    </script>
+    <!-- Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</body>
+</html>
