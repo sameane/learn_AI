@@ -345,6 +345,76 @@ document.addEventListener('DOMContentLoaded', () => {
         // No special handling needed for object positions as they use canvasWidth/Height
     });
 
+    // Touch/mobility detection
+    function isMobile() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
+    // Touch controls
+    let lastTouchX = null, lastTouchY = null;
+    let touchMoved = false;
+    function handleTouchStart(e) {
+        if (e.touches.length === 1) {
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+            touchMoved = false;
+        }
+    }
+    function handleTouchMove(e) {
+        if (e.touches.length === 1 && lastTouchX !== null && lastTouchY !== null) {
+            const dx = e.touches[0].clientX - lastTouchX;
+            const dy = e.touches[0].clientY - lastTouchY;
+            if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    if (dx > 0) setDirection('right');
+                    else setDirection('left');
+                } else {
+                    if (dy > 0) setDirection('down');
+                    else setDirection('up');
+                }
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+                touchMoved = true;
+            }
+        }
+    }
+    function handleTouchEnd(e) {
+        if (!touchMoved) {
+            triggerShockwave();
+        }
+        lastTouchX = null;
+        lastTouchY = null;
+        touchMoved = false;
+    }
+
+    // Show mobile controls if on mobile
+    if (isMobile()) {
+        document.getElementById('mobileControls').style.display = 'flex';
+        document.getElementById('controlsHint').style.display = 'none';
+        // Button controls
+        document.getElementById('swipeUp').onclick = () => setDirection('up');
+        document.getElementById('swipeDown').onclick = () => setDirection('down');
+        document.getElementById('swipeLeft').onclick = () => setDirection('left');
+        document.getElementById('swipeRight').onclick = () => setDirection('right');
+        document.getElementById('tapShockwave').onclick = () => triggerShockwave();
+        // Touch gestures
+        canvas.addEventListener('touchstart', handleTouchStart, {passive:false});
+        canvas.addEventListener('touchmove', handleTouchMove, {passive:false});
+        canvas.addEventListener('touchend', handleTouchEnd, {passive:false});
+    }
+
+    // Add setDirection and triggerShockwave wrappers if not present
+    function setDirection(dir) {
+        // ...existing code for direction change (reuse your logic)...
+        if (typeof changeDirection === 'function') changeDirection(dir);
+        // else, set your direction variable here
+    }
+    function triggerShockwave() {
+        // ...existing code to trigger shockwave...
+        if (typeof activateShockwave === 'function') activateShockwave();
+        // else, set your shockwave logic here
+    }
+
     // Initial setup
     resizeCanvas(); // Set initial canvas size
     initGame(); // Start the game

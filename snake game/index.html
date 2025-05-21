@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Snake Game by AI</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -16,7 +16,14 @@
         <div class="game-container">
             <canvas id="gameCanvas"></canvas>
             <div id="scoreDisplay" class="ui-box">Score: 0</div>
-            <div id="controlsHint" class="ui-box">Move: Mouse | Shockwave: Left-click</div>
+            <div id="controlsHint" class="ui-box">Move: Mouse/Swipe | Shockwave: Left-click/Tap</div>
+            <div id="mobileControls" class="mobile-controls" style="display:none;">
+                <button id="swipeUp" aria-label="Up">▲</button>
+                <button id="swipeLeft" aria-label="Left">◀</button>
+                <button id="swipeDown" aria-label="Down">▼</button>
+                <button id="swipeRight" aria-label="Right">▶</button>
+                <button id="tapShockwave" aria-label="Shockwave">💥</button>
+            </div>
             
             <div id="gameOverScreen" class="modal">
                 <div class="modal-content">
